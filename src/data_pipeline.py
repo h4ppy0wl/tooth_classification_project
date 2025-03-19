@@ -151,7 +151,7 @@ def convert_int32_to_int(obj):
 
 def dental_gray_world_white_balance(image_rgb):
     """
-    Apply modified gray-world white balance for dental images.
+    A preprocessing function to apply modified gray-world white balance for dental images.
     Preserves red (gums/tongue) while balancing white (teeth).
     """
     img_float = image_rgb.astype(np.float32) / 255.0  # Normalize to [0,1]
