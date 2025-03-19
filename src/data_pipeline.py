@@ -3,13 +3,13 @@
 import os
 import glob
 from typing import List, Tuple, Dict
-import pandas as pd
 import numpy as np
 import cv2  # or Pillow (PIL) if you prefer
 import skimage
 import tensorflow as tf
 import random
 import json
+# import pandas as pd
 
 class InputStream:
     def __init__(self, data):
@@ -192,11 +192,52 @@ def dental_gray_world_white_balance(image_rgb):
     return skimage.img_as_ubyte(img_float)  # Convert back to uint8
 
 def is_darker_than_threshold(image_path, threshold=0.25):
+    """
+    Determines if the mean intensity of an image is darker than a given threshold.
+
+    Parameters:
+    image_path (str): The file path to the image.
+    threshold (float, optional): The intensity threshold to compare against. Default is 0.25.
+
+    Returns:
+    bool: True if the mean intensity of the image is less than the threshold, False otherwise.
+    """
     image = skimage.io.imread(image_path)
     image_gray = skimage.color.rgb2gray(image)  # Convert to grayscale
     mean_intensity = np.mean(image_gray)
     return mean_intensity < threshold
 
+def remove_dark_images_from_json(json_data: dict, image_base_path: str) -> dict:
+    """
+    Iterates over each entry in the JSON data, and for each tooth in teeth_data,
+    removes those entries for which func1 returns True (i.e. tooth images considered too dark).
+
+    If an entry's teeth_data becomes empty after filtering, the entire entry is removed.
+    
+    Args:
+        json_data: Dictionary representing the JSON structure.
+        image_base_path: Base folder path where the tooth images are stored.
+        
+    Returns:
+        Filtered JSON data with dark tooth images removed.
+    """
+    filtered_data = {}
+    for key, entry in json_data.items():
+        teeth_data = entry.get("teeth_data", {})
+        filtered_teeth = {}
+        for tooth_key, tooth_entry in teeth_data.items():
+            tooth_image_filename = tooth_entry.get("tooth_image_filename", "")
+            if not tooth_image_filename:
+                continue
+            full_image_path = os.path.join(image_base_path, tooth_image_filename)
+            if is_darker_than_threshold(full_image_path):  # Skip dark images
+                continue
+            filtered_teeth[tooth_key] = tooth_entry
+        # Only add entry if at least one tooth passed our brightness check
+        if filtered_teeth:
+            entry["teeth_data"] = filtered_teeth
+            filtered_data[key] = entry
+    return filtered_data
 
 def load_image_paths(data_dir: str) -> List[str]:
     """
@@ -208,10 +249,7 @@ def load_image_paths(data_dir: str) -> List[str]:
     # image_paths += glob.glob(os.path.join(data_dir, "**", "*.png"), recursive=True)
     return image_paths
 
-def crop_tooth_region(
-    image: np.ndarray, 
-    bbox: Tuple[int, int, int, int]
-) -> np.ndarray:
+def crop_tooth_region(image: np.ndarray, bbox: Tuple[int, int, int, int]) -> np.ndarray:
     """
     Crop an image to a bounding box (x, y, width, height).
     This bounding box presumably comes from a tooth detection/annotation step.
@@ -221,10 +259,7 @@ def crop_tooth_region(
     cropped = image[y:y+h, x:x+w]
     return cropped
 
-def mask_background(
-    image: np.ndarray,
-    mask_threshold: int = 230
-) -> np.ndarray:
+def mask_background(image: np.ndarray, mask_threshold: int = 230 ) -> np.ndarray:
     """
     Example function to mask the background in an image (e.g., near white).
     You would replace this logic with whatever works best for your scenario.
@@ -244,17 +279,78 @@ def mask_background(
     masked_image = cv2.bitwise_and(image, mask_inv_3c)
     return masked_image
 
-def load_annotations(annotation_file: str) -> pd.DataFrame:
+def convert_annotations(input_annotations: dict, target_class = 'Pla') -> dict:
     """
-    Reads a CSV or JSON containing bounding boxes, labels (plaque, no plaque, etc.).
-    Must match how you store your annotations.
-    Example CSV columns could be: [image_path, x, y, w, h, label].
+    Converts a dataset annotations dictionary to a new dictionary where keys are the tooth's label_id.
+    
+    Each output entry has the form:
+    {
+      'tooth_img_name': <tooth_image_filename>,
+      'tooth_number': <tooth_number>,
+      'target_class': 0 or 1,  # 1 if any diagnostic label's region_class equals 'plaque'
+      'tooth_label': {
+          'all_points_x': [...],
+          'all_points_y': [...]
+      },
+      ...
+    }
+    
+    Args:
+        input_annotations: A dictionary containing dataset annotations.
+        
+    Returns:
+        A dictionary keyed by each tooth's label_id with the new structure.
     """
-    df = pd.read_csv(annotation_file)  # or pd.read_json, etc.
-    return df
+    output = {}
+    for entry in input_annotations.values():
+        teeth_data = entry.get("teeth_data", {})
+        for tooth in teeth_data.values():
+            label_id = tooth.get("label_id")
+            if not label_id:
+                continue
+            
+            # Extract basic info
+            tooth_img_name = tooth.get("tooth_image_filename", "")
+            tooth_number = tooth.get("tooth_number", None)
+            
+            # Check diagnostic_labels for plaque presence.
+            class_value = 0
+            diag_labels = tooth.get("diagnostic_labels", {})
+            for diag in diag_labels.values():
+                # assuming region_class equal to "plaque" marks a positive plaque label
+                if diag.get("region_class", "").lower() == target_class.lower():
+                    class_value = 1
+                    break
+            
+            # Extract tooth_label (only x and y coordinates)
+            tooth_label = tooth.get("tooth_label", {})
+            filtered_tooth_label = {
+                "all_points_x": tooth_label.get("all_points_x", []),
+                "all_points_y": tooth_label.get("all_points_y", [])
+            }
+            
+            output[label_id] = {
+                "tooth_img_name": tooth_img_name,
+                "tooth_number": tooth_number,
+                target_class: class_value,
+                "tooth_label": filtered_tooth_label
+                # ... add more fields if needed
+            }
+    return output
+
+# def load_annotations(annotation_file: str) -> pd.DataFrame:
+#     """
+#     Reads a CSV or JSON containing bounding boxes, labels (plaque, no plaque, etc.).
+#     Must match how you store your annotations.
+#     Example CSV columns could be: [image_path, x, y, w, h, label].
+#     """
+#     df = pd.read_csv(annotation_file)  # or pd.read_json, etc.
+#     return df
+
+
 
 def preprocess_and_label(
-    df_annotations: pd.DataFrame,
+    df_annotations,#: pd.DataFrame,
     output_dir: str,
     mask_bg: bool = True
 ) -> None:
