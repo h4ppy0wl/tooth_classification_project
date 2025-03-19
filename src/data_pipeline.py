@@ -7,7 +7,6 @@ import pandas as pd
 import numpy as np
 import cv2  # or Pillow (PIL) if you prefer
 import skimage
-from skimage import color, img_as_ubyte
 import tensorflow as tf
 import random
 import json
@@ -157,7 +156,7 @@ def dental_gray_world_white_balance(image_rgb):
     img_float = image_rgb.astype(np.float32) / 255.0  # Normalize to [0,1]
 
     # Convert to HSV to detect white (teeth) and red (gums/tongue)
-    img_hsv = color.rgb2hsv(img_float)
+    img_hsv = skimage.color.rgb2hsv(img_float)
 
     # Create a "teeth mask" (high brightness)
     # teeth_mask = img_hsv[..., 2] > 0.75  # V (brightness) threshold for teeth
@@ -190,7 +189,13 @@ def dental_gray_world_white_balance(image_rgb):
     # Clip values to [0,1] to avoid artifacts
     img_float = np.clip(img_float, 0, 1)
 
-    return img_as_ubyte(img_float)  # Convert back to uint8
+    return skimage.img_as_ubyte(img_float)  # Convert back to uint8
+
+def is_darker_than_threshold(image_path, threshold=0.25):
+    image = skimage.io.imread(image_path)
+    image_gray = skimage.color.rgb2gray(image)  # Convert to grayscale
+    mean_intensity = np.mean(image_gray)
+    return mean_intensity < threshold
 
 
 def load_image_paths(data_dir: str) -> List[str]:
