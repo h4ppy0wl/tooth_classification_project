@@ -22,6 +22,7 @@ class InputStream:
         return int(out, 2)
 
 
+    @staticmethod
     def access_bit(data1, num):
         """ from bytes array to bits by num position"""
         base = int(num // 8)
@@ -29,12 +30,14 @@ class InputStream:
         return (data1[base] & (1 << shift)) >> shift
 
 
+    @staticmethod
     def bytes2bit(data):
         """ get bit string from bytes data"""
         string1 = ''.join([str(InputStream.access_bit(data, i)) for i in range(len(data) * 8)])
         return string1
 
 
+    @staticmethod
     def rle_to_mask(rle: List[int], height: int, width: int) -> np.array:
         """
         Converts rle to image mask
@@ -70,6 +73,23 @@ class InputStream:
 
         image = np.reshape(out, [height, width, 4])[:, :, 3]
         return image
+    
+    @staticmethod
+    def polygon_to_mask(polygon: Dict[str, List[int]], height: int, width: int) -> np.array:
+        """
+        Converts polygon data to a binary mask.
+        Args:
+            polygon: Dictionary with 'all_points_x' and 'all_points_y' lists.
+            height: Height of the output mask.
+            width: Width of the output mask.
+
+        Returns: np.array
+        """
+        mask = np.zeros((height, width), dtype=np.uint8)
+        points = np.array([polygon['all_points_x'], polygon['all_points_y']]).T
+        rr, cc = skimage.draw.polygon(points[:, 1], points[:, 0], mask.shape)
+        mask[rr, cc] = 1
+        return mask
 
 def mask_to_label_studio_rle(mask):
     """
@@ -210,7 +230,7 @@ def is_darker_than_threshold(image_path, threshold=0.25):
 def remove_dark_images_from_json(json_data: dict, image_base_path: str) -> dict:
     """
     Iterates over each entry in the JSON data, and for each tooth in teeth_data,
-    removes those entries for which func1 returns True (i.e. tooth images considered too dark).
+    removes those entries for which is_darker_than_threshold() returns True (i.e. tooth images considered too dark).
 
     If an entry's teeth_data becomes empty after filtering, the entire entry is removed.
     
@@ -239,6 +259,35 @@ def remove_dark_images_from_json(json_data: dict, image_base_path: str) -> dict:
             filtered_data[key] = entry
     return filtered_data
 
+def parse_json(json_path):
+    """
+    This function is the first step in loading the training specific json file.
+    It reads the json file and returns the data as a dictionary.
+    Args:
+        json_path: path to the json file
+        
+    Returns: a list of dicts, each containing the following
+            {
+            'image_path': str,
+            'bbox': [xmin, ymin, w, h],
+            'label': 0/1
+            }
+    """
+    with open(json_path, 'r') as f:
+        data = json.load(f)
+
+    records = []
+    for item in data:  # each item is one full image
+        image_path = item['tooth_image_path']
+        for tooth in item['teeth']:
+            r = {
+                'image_path': image_path,
+                'bbox': tooth['bbox'],
+                'label': tooth['label']
+            }
+            records.append(r)
+    return records
+
 def load_image_paths(data_dir: str) -> List[str]:
     """
     Recursively find image files (e.g., .jpg, .png) under data_dir.
@@ -259,29 +308,81 @@ def crop_tooth_region(image: np.ndarray, bbox: Tuple[int, int, int, int]) -> np.
     cropped = image[y:y+h, x:x+w]
     return cropped
 
-def mask_background(image: np.ndarray, mask_threshold: int = 230 ) -> np.ndarray:
+def smooth_polygon(polygon: dict, tolerance: float = 0.015) -> dict:
     """
-    Example function to mask the background in an image (e.g., near white).
-    You would replace this logic with whatever works best for your scenario.
+    Smooths the jagged borders of a polygon by approximating its shape with fewer vertices.
+
+    This function receives a polygon defined by its 'all_points_x' and 'all_points_y' keys and uses 
+    skimage.measure.approximate_polygon to reduce the stepped edges caused by software-generated annotation.
+    The tolerance parameter controls the degree of smoothing (a higher value results in a smoother polygon).
+
+    Parameters:
+        polygon (dict): A dictionary containing two keys, "all_points_x" and "all_points_y", each mapping to a list of 
+                        integers defining the polygon vertices.
+        tolerance (float): The maximum distance from the original polygon points to the approximated points.
+                           Higher values yield a smoother polygon shape.
+
+    Returns:
+        dict: A new polygon dictionary with smoothed "all_points_x" and "all_points_y" values.
     """
-    # Convert to grayscale for thresholding
-    gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
-    # Create mask
-    _, mask = cv2.threshold(gray, mask_threshold, 255, cv2.THRESH_BINARY)
-    # Invert mask if necessary, depending on which part you want to keep
-    mask_inv = cv2.bitwise_not(mask)
-    
-    # Expand back to 3 channels
-    mask_inv_3c = cv2.cvtColor(mask_inv, cv2.COLOR_GRAY2BGR)
-    
-    # Apply mask
-    # everything that is background becomes black
-    masked_image = cv2.bitwise_and(image, mask_inv_3c)
+    # Convert polygon points to a N x 2 numpy array.
+    points = np.array([polygon["all_points_x"], polygon["all_points_y"]]).T
+
+    # Approximate the polygon with the given tolerance to smooth its borders.
+    smoothed_points = skimage.measure.approximate_polygon(points, tolerance)
+
+    # Convert the smoothed points back to integer coordinates.
+    smoothed_polygon = {
+        "all_points_x": smoothed_points[:, 0].astype(int).tolist(),
+        "all_points_y": smoothed_points[:, 1].astype(int).tolist()
+    }
+
+    return smoothed_polygon
+
+def mask_background(image: np.ndarray, polygon: dict) -> np.ndarray:
+    """
+    Masks the background of an image outside a specified polygon.
+
+    This function takes an input image and a polygon defined by its x and y coordinates. It creates a mask
+    with the polygon area filled (set to 1) and replaces all pixels outside the polygon with a default gray value.
+    For a color image (3D), the replacement color is (128, 128, 128); for a grayscale image (2D), the replacement is 128.
+
+    Parameters:
+        image (np.ndarray): The input image, which can be either a color image (3D array) or a grayscale image (2D array).
+        polygon (dict): A dictionary containing two keys, "all_points_x" and "all_points_y", each mapping to a list of 
+                        integers that define the polygon vertices along the x-axis and y-axis respectively.
+
+    Returns:
+        np.ndarray: A new image array where all pixels outside the defined polygon are replaced by the default gray value.
+    """
+    height, width = image.shape[:2]
+    mask = np.zeros((height, width), dtype=np.uint8)
+    all_points_x = np.array(polygon["all_points_x"], dtype=np.int32)
+    all_points_y = np.array(polygon["all_points_y"], dtype=np.int32)
+    rr, cc = skimage.draw.polygon(all_points_y, all_points_x, shape=mask.shape)
+    mask[rr, cc] = 1
+
+    # Make a copy of the original image to apply the mask
+    masked_image = image.copy()
+
+    # Define the gray color using a default threshold value of 128
+    gray_color = (128, 128, 128) if image.ndim == 3 else 128
+
+    # Replace pixels outside the polygon (mask value != 1) with gray
+    if image.ndim == 3:
+        masked_image[mask != 1] = gray_color
+    else:
+        masked_image[mask != 1] = gray_color
+
     return masked_image
 
 def convert_annotations(input_annotations: dict, target_class = 'Pla') -> dict:
     """
-    Converts a dataset annotations dictionary to a new dictionary where keys are the tooth's label_id.
+    Converts a dictionary retrieved from a json of complete toothwise semantic annotations to 
+    a new dictionary where keys are the tooth's label_id. and contain information about each tooth's image,
+    number, polygon label, and a target class label. This forms the master json file for the toothwise semantic 
+    segmentation, and has more information like the tooth polygon that can be used to mask the background and provide
+    an attention area for the model.
     
     Each output entry has the form:
     {
