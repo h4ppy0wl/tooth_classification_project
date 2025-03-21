@@ -4,11 +4,12 @@ import os
 import glob
 from typing import List, Tuple, Dict
 import numpy as np
-import cv2  # or Pillow (PIL) if you prefer
+import cv2 
 import skimage
 import tensorflow as tf
 import random
 import json
+import config
 # import pandas as pd
 
 class InputStream:
@@ -211,7 +212,7 @@ def dental_gray_world_white_balance(image_rgb):
 
     return skimage.img_as_ubyte(img_float)  # Convert back to uint8
 
-def is_darker_than_threshold(image_path, threshold=0.25):
+def is_darker_than_threshold(image_path, threshold: float= config.DARK_IMAGE_THRESHOLD):
     """
     Determines if the mean intensity of an image is darker than a given threshold.
 
@@ -259,7 +260,7 @@ def remove_dark_images_from_json(json_data: dict, image_base_path: str) -> dict:
             filtered_data[key] = entry
     return filtered_data
 
-def parse_json(json_path):
+def parse_json(json_path: str = config.ANNOTATION_FILE) -> list:
     """
     This function is the first step in loading the training specific json file.
     It reads the json file and returns the data as a dictionary.
@@ -308,7 +309,7 @@ def crop_tooth_region(image: np.ndarray, bbox: Tuple[int, int, int, int]) -> np.
     cropped = image[y:y+h, x:x+w]
     return cropped
 
-def smooth_polygon(polygon: dict, tolerance: float = 0.015) -> dict:
+def smooth_polygon(polygon: dict, tolerance: float = config.POLYGON_SMOOTHING_TOLERANCE) -> dict:
     """
     Smooths the jagged borders of a polygon by approximating its shape with fewer vertices.
 
@@ -339,7 +340,7 @@ def smooth_polygon(polygon: dict, tolerance: float = 0.015) -> dict:
 
     return smoothed_polygon
 
-def mask_background(image: np.ndarray, polygon: dict) -> np.ndarray:
+def mask_background(image: np.ndarray, polygon: dict, mask_value: int=config.MASK_VALUE) -> np.ndarray:
     """
     Masks the background of an image outside a specified polygon.
 
@@ -366,7 +367,7 @@ def mask_background(image: np.ndarray, polygon: dict) -> np.ndarray:
     masked_image = image.copy()
 
     # Define the gray color using a default threshold value of 128
-    gray_color = (128, 128, 128) if image.ndim == 3 else 128
+    gray_color = (mask_value, mask_value, mask_value) if image.ndim == 3 else mask_value
 
     # Replace pixels outside the polygon (mask value != 1) with gray
     if image.ndim == 3:
@@ -376,7 +377,7 @@ def mask_background(image: np.ndarray, polygon: dict) -> np.ndarray:
 
     return masked_image
 
-def convert_annotations(input_annotations: dict, target_class = 'Pla') -> dict:
+def convert_annotations(input_annotations: dict, target_class: str=config.TARGET_CLASS) -> dict:
     """
     Converts a dictionary retrieved from a json of complete toothwise semantic annotations to 
     a new dictionary where keys are the tooth's label_id. and contain information about each tooth's image,
@@ -439,6 +440,54 @@ def convert_annotations(input_annotations: dict, target_class = 'Pla') -> dict:
             }
     return output
 
+def pad_and_resize(image: np.ndarray, target_dim: int=config.TARGET_DIM, mask_value: int=config.MASK_VALUE) -> np.ndarray:
+    """
+    Pads an input image to be square using the longest image dimension,
+    then resizes it to a square image with dimensions (target_dim x target_dim).
+
+    Parameters:
+        image (np.ndarray): Input image array (grayscale or color).
+        target_dim (int): The desired dimension in pixels for the output square image. It is from the config class.
+        mask_value (int): The value to use for padding. It is from the config class.
+
+    Returns:
+        np.ndarray: The padded and resized image.
+    """
+    h, w = image.shape[:2]
+    max_side = max(h, w)
+    
+    # Calculate required padding amounts
+    pad_height = max_side - h
+    pad_width = max_side - w
+    pad_top = pad_height // 2
+    pad_bottom = pad_height - pad_top
+    pad_left = pad_width // 2
+    pad_right = pad_width - pad_left
+    
+    # Determine correct constant value based on image dtype and range.
+    if image.dtype == np.uint8:
+        pad_const = mask_value  # value in 0-255
+    elif np.issubdtype(image.dtype, np.floating) and image.max() <= 1.0:
+        pad_const = mask_value / 255.0  # convert 128 to equivalent in [0,1]
+    else:
+        pad_const = mask_value  # fall back; adjust as needed
+    
+    # Pad image differently based on its dimensionality (grayscale vs. color)
+    if image.ndim == 3:
+        padded = np.pad(image, ((pad_top, pad_bottom), (pad_left, pad_right), (0, 0)), mode='constant', constant_values= pad_const)
+    elif image.ndim == 2:
+        padded = np.pad(image, ((pad_top, pad_bottom), (pad_left, pad_right)), mode='constant', constant_values= pad_const)
+    else:
+        raise ValueError("Unsupported image dimensions.")
+    
+    # Resize the padded image to target_dim x target_dim.
+    # The resize function returns a float image in [0,1]. If the input is of type uint8, rescale to 0-255.
+    resized = skimage.transform.resize(padded, (target_dim, target_dim), anti_aliasing=True)
+    if image.dtype == np.uint8:
+        resized = (resized * 255).astype(np.uint8)
+    
+    return resized
+
 # def load_annotations(annotation_file: str) -> pd.DataFrame:
 #     """
 #     Reads a CSV or JSON containing bounding boxes, labels (plaque, no plaque, etc.).
@@ -495,11 +544,11 @@ def preprocess_and_label(
         cv2.imwrite(out_path, cropped_img)
 
 def split_dataset(
-    images_dir: str,
-    train_ratio: float = 0.7,
-    val_ratio: float = 0.15,
-    test_ratio: float = 0.15,
-    random_seed: int = 42
+    images_dir: str = config.IMAGE_DIR,
+    train_ratio: float = config.TRAIN_RATIO,
+    val_ratio: float = config.VAL_RATIO,
+    test_ratio: float = config.TEST_RATIO,
+    random_seed: int = config.RANDOM_SEED
 ) -> Dict[str, List[str]]:
     """
     Splits the processed dataset into train, val, test sets.
