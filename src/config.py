@@ -13,15 +13,17 @@ class Config:
         TARGET_CLASS (str): The target class (e.g., "plaque") for classification tasks.
     """
     
-    IMAGE_DIR = "data/images"
+    IMAGE_DIR = "data/processed"
     ANNOTATION_FILE = "data/annotations.json"
     OUTPUT_DIR = "data/processed"
+    DATA_DIR = "C:/Users/anedaeij23/Project/tooth_classification_project"
     
-    MASK_BG = True
+
     
     
-    TARGET_DIM = 224
-    MASK_VALUE = 128
+    TARGET_DIM = 256
+    MASK_VALUE = 0#128
+    ANTIALIZING_IN_RESIZING = True
 
     TRAIN_RATIO = 0.8
     VAL_RATIO = 0.1
@@ -29,9 +31,23 @@ class Config:
 
     BATCH_SIZE = 32
     RANDOM_SEED = 42
+    AUGMENT_DATA = False
+    SHUFFLE_DATASET = True
+    NORMALIZE_IMAGES = False
+    MASK_BG = True
+    REMOVE_DARK_IMAGES = True
+    
 
     TARGET_CLASS = "Pla"
     
+    MODEL_ARCHITECTURE = "resnet50"
+    L2_REGULARIZATION = 0.001
+    DROPOUT_RATE = 0.5
+    INITIAL_LR = 1e-3
+    NUM_INITIAL_EPOCHS = 10
+    NUM_FINE_TUNE_EPOCHS = 10
+    FINE_TUNE_LR = 1e-4
+    FINE_TUNE_FROM_LAYER = 22
     
     # additional parameters that you probably don't need to change
     DARK_IMAGE_THRESHOLD = 0.25

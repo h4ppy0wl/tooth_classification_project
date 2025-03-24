@@ -6,10 +6,13 @@ from typing import List, Tuple, Dict
 import numpy as np
 import cv2 
 import skimage
+from skimage import io, transform, draw, color, measure
 import tensorflow as tf
 import random
 import json
-import config
+from src.config import Config
+from tqdm import tqdm
+from sklearn.model_selection import train_test_split
 # import pandas as pd
 
 class InputStream:
@@ -174,10 +177,13 @@ def dental_gray_world_white_balance(image_rgb):
     A preprocessing function to apply modified gray-world white balance for dental images.
     Preserves red (gums/tongue) while balancing white (teeth).
     """
-    img_float = image_rgb.astype(np.float32) / 255.0  # Normalize to [0,1]
+    img_float = image_rgb.copy()
+    # Convert to float for processing
+    if image_rgb.dtype == np.uint8:
+        img_float = image_rgb.astype(np.float32) / 255.0  # Normalize to [0,1]
 
     # Convert to HSV to detect white (teeth) and red (gums/tongue)
-    img_hsv = skimage.color.rgb2hsv(img_float)
+    img_hsv = color.rgb2hsv(img_float)
 
     # Create a "teeth mask" (high brightness)
     # teeth_mask = img_hsv[..., 2] > 0.75  # V (brightness) threshold for teeth
@@ -210,9 +216,9 @@ def dental_gray_world_white_balance(image_rgb):
     # Clip values to [0,1] to avoid artifacts
     img_float = np.clip(img_float, 0, 1)
 
-    return skimage.img_as_ubyte(img_float)  # Convert back to uint8
+    return img_float#skimage.img_as_ubyte(img_float)  # Convert back to uint8
 
-def is_darker_than_threshold(image_path, threshold: float= config.DARK_IMAGE_THRESHOLD):
+def is_darker_than_threshold(image_path, threshold: float= Config.DARK_IMAGE_THRESHOLD):
     """
     Determines if the mean intensity of an image is darker than a given threshold.
 
@@ -223,9 +229,12 @@ def is_darker_than_threshold(image_path, threshold: float= config.DARK_IMAGE_THR
     Returns:
     bool: True if the mean intensity of the image is less than the threshold, False otherwise.
     """
-    image = skimage.io.imread(image_path)
-    image_gray = skimage.color.rgb2gray(image)  # Convert to grayscale
+    image = io.imread(image_path)
+    image_gray = color.rgb2gray(image)  # Convert to grayscale
+    if image_gray.dtype == np.uint8:
+        image = image.astype(np.float32) / 255.0
     mean_intensity = np.mean(image_gray)
+    
     return mean_intensity < threshold
 
 def remove_dark_images_from_json(json_data: dict, image_base_path: str) -> dict:
@@ -244,23 +253,27 @@ def remove_dark_images_from_json(json_data: dict, image_base_path: str) -> dict:
     """
     filtered_data = {}
     for key, entry in json_data.items():
-        teeth_data = entry.get("teeth_data", {})
+        teeth_data = entry["teeth_data"]
         filtered_teeth = {}
         for tooth_key, tooth_entry in teeth_data.items():
-            tooth_image_filename = tooth_entry.get("tooth_image_filename", "")
+            tooth_image_filename = tooth_entry["tooth_image_filename"]
+            # print(f"Checking image: {tooth_image_filename}")
             if not tooth_image_filename:
+                print("Missing image filename for tooth")
                 continue
             full_image_path = os.path.join(image_base_path, tooth_image_filename)
+            # print(f"Checking image: {tooth_image_filename}")
             if is_darker_than_threshold(full_image_path):  # Skip dark images
+                print(f"{tooth_image_filename} was dark, removed")
                 continue
             filtered_teeth[tooth_key] = tooth_entry
         # Only add entry if at least one tooth passed our brightness check
-        if filtered_teeth:
+        if len(filtered_teeth) > 0:
             entry["teeth_data"] = filtered_teeth
             filtered_data[key] = entry
     return filtered_data
 
-def parse_json(json_path: str = config.ANNOTATION_FILE) -> list:
+def parse_json(json_path: str = Config.ANNOTATION_FILE) -> list:
     """
     This function is the first step in loading the training specific json file.
     It reads the json file and returns the data as a dictionary.
@@ -309,7 +322,7 @@ def crop_tooth_region(image: np.ndarray, bbox: Tuple[int, int, int, int]) -> np.
     cropped = image[y:y+h, x:x+w]
     return cropped
 
-def smooth_polygon(polygon: dict, tolerance: float = config.POLYGON_SMOOTHING_TOLERANCE) -> dict:
+def smooth_polygon(polygon: dict, tolerance: float = Config.POLYGON_SMOOTHING_TOLERANCE) -> dict:
     """
     Smooths the jagged borders of a polygon by approximating its shape with fewer vertices.
 
@@ -340,7 +353,7 @@ def smooth_polygon(polygon: dict, tolerance: float = config.POLYGON_SMOOTHING_TO
 
     return smoothed_polygon
 
-def mask_background(image: np.ndarray, polygon: dict, mask_value: int=config.MASK_VALUE) -> np.ndarray:
+def mask_background(image: np.ndarray, polygon: dict, mask_value: int=Config.MASK_VALUE) -> np.ndarray:
     """
     Masks the background of an image outside a specified polygon.
 
@@ -367,17 +380,17 @@ def mask_background(image: np.ndarray, polygon: dict, mask_value: int=config.MAS
     masked_image = image.copy()
 
     # Define the gray color using a default threshold value of 128
-    gray_color = (mask_value, mask_value, mask_value) if image.ndim == 3 else mask_value
+    mask_color = (mask_value, mask_value, mask_value) if image.ndim == 3 else mask_value
 
     # Replace pixels outside the polygon (mask value != 1) with gray
     if image.ndim == 3:
-        masked_image[mask != 1] = gray_color
+        masked_image[mask != 1] = mask_color
     else:
-        masked_image[mask != 1] = gray_color
+        masked_image[mask != 1] = mask_color
 
     return masked_image
 
-def convert_annotations(input_annotations: dict, target_class: str=config.TARGET_CLASS) -> dict:
+def convert_annotations(input_annotations: dict, target_class: str=Config.TARGET_CLASS) -> dict:
     """
     Converts a dictionary retrieved from a json of complete toothwise semantic annotations to 
     a new dictionary where keys are the tooth's label_id. and contain information about each tooth's image,
@@ -389,8 +402,8 @@ def convert_annotations(input_annotations: dict, target_class: str=config.TARGET
     {
       'tooth_img_name': <tooth_image_filename>,
       'tooth_number': <tooth_number>,
-      'target_class': 0 or 1,  # 1 if any diagnostic label's region_class equals 'plaque'
-      'tooth_label': {
+      'target_class': class name/ no_ ,
+      'tooth_poly': {
           'all_points_x': [...],
           'all_points_y': [...]
       },
@@ -416,12 +429,12 @@ def convert_annotations(input_annotations: dict, target_class: str=config.TARGET
             tooth_number = tooth.get("tooth_number", None)
             
             # Check diagnostic_labels for plaque presence.
-            class_value = 0
+            class_value = 'no_'
             diag_labels = tooth.get("diagnostic_labels", {})
             for diag in diag_labels.values():
                 # assuming region_class equal to "plaque" marks a positive plaque label
                 if diag.get("region_class", "").lower() == target_class.lower():
-                    class_value = 1
+                    class_value = target_class
                     break
             
             # Extract tooth_label (only x and y coordinates)
@@ -434,21 +447,21 @@ def convert_annotations(input_annotations: dict, target_class: str=config.TARGET
             output[label_id] = {
                 "tooth_img_name": tooth_img_name,
                 "tooth_number": tooth_number,
-                target_class: class_value,
-                "tooth_label": filtered_tooth_label
-                # ... add more fields if needed
+                "target_class": class_value,
+                "tooth_poly": filtered_tooth_label
             }
     return output
 
-def pad_and_resize(image: np.ndarray, target_dim: int=config.TARGET_DIM, mask_value: int=config.MASK_VALUE) -> np.ndarray:
+def pad_and_resize(image: np.ndarray, target_dim: int=Config.TARGET_DIM,
+                   mask_value: int=Config.MASK_VALUE) -> np.ndarray:
     """
-    Pads an input image to be square using the longest image dimension,
+    Pads an input image to be square using the largest image dimension,
     then resizes it to a square image with dimensions (target_dim x target_dim).
 
     Parameters:
         image (np.ndarray): Input image array (grayscale or color).
-        target_dim (int): The desired dimension in pixels for the output square image. It is from the config class.
-        mask_value (int): The value to use for padding. It is from the config class.
+        target_dim (int): The desired dimension in pixels for the output square image. It is from the Config class.
+        mask_value (int): The value to use for padding. It is from the Config class. It defines the masked area colour.
 
     Returns:
         np.ndarray: The padded and resized image.
@@ -481,13 +494,18 @@ def pad_and_resize(image: np.ndarray, target_dim: int=config.TARGET_DIM, mask_va
         raise ValueError("Unsupported image dimensions.")
     
     # Resize the padded image to target_dim x target_dim.
+    # resized = tf.image.resize(image, (target_dim, target_dim), antialias= Config.ANTIALIZING_IN_RESIZING)
+    # resized = resized / 255.0  # scale to [0, 1]
     # The resize function returns a float image in [0,1]. If the input is of type uint8, rescale to 0-255.
-    resized = skimage.transform.resize(padded, (target_dim, target_dim), anti_aliasing=True)
+    resized = transform.resize(padded, (target_dim, target_dim), anti_aliasing= Config.ANTIALIZING_IN_RESIZING)
     if image.dtype == np.uint8:
         resized = (resized * 255).astype(np.uint8)
     
     return resized
-
+    
+    
+    
+    
 # def load_annotations(annotation_file: str) -> pd.DataFrame:
 #     """
 #     Reads a CSV or JSON containing bounding boxes, labels (plaque, no plaque, etc.).
@@ -498,14 +516,29 @@ def pad_and_resize(image: np.ndarray, target_dim: int=config.TARGET_DIM, mask_va
 #     return df
 
 
+'''
+    {
+      'tooth_img_name': <tooth_image_filename>,
+      'tooth_number': <tooth_number>,
+      'target_class': class name/ no_ ,
+      'tooth_poly': {
+          'all_points_x': [...],
+          'all_points_y': [...]
+      },
+      ...
+    }
+'''
 
-def preprocess_and_label(
-    df_annotations,#: pd.DataFrame,
+def preprocess_dataset(
+    json_annotations_path: str,#: pd.DataFrame,
     output_dir: str,
-    mask_bg: bool = True
+    image_dir: str = Config.IMAGE_DIR,
+    target_dim: int = Config.TARGET_DIM,
+    mask_bg: bool = Config.MASK_BG,
+    verbose: bool = False
 ) -> None:
     """
-    Goes through each annotation, loads image, crops the tooth region,
+    Goes through each annotation, loads image, pads and resizes,
     optionally masks the background, and saves the final image to output_dir 
     with the appropriate label in the filename or subfolder.
 
@@ -513,85 +546,137 @@ def preprocess_and_label(
     """
     os.makedirs(output_dir, exist_ok=True)
     
-    for idx, row in df_annotations.iterrows():
-        img_path = row["image_path"]
-        x, y, w, h = row["x"], row["y"], row["w"], row["h"]
-        label = row["label"]  # e.g. 'plaque' or 'no_plaque'
+    #loading the raw json file
+    with open(json_annotations_path, 'r', encoding='utf-8') as f:
+        annotations = json.load(f) 
+    
+    #filtering out the dark images
+    if Config.REMOVE_DARK_IMAGES:
+        if verbose: print("Filtering out dark images...")
+        annotations = remove_dark_images_from_json(annotations, image_dir)
+        print(f"Number of filtered annotations: {len(annotations)}")
+        if verbose: print("Saving filtered annotations...")
+    
+    #converting the raw json file to the format required for the target class
+    if verbose: print("Converting annotations...")
+    annotations = convert_annotations(annotations)
+    print(f"Number of annotations: {len(annotations)}")
+
+    annotations = convert_int32_to_int(annotations)
+    with open(os.path.join(output_dir,f"filtered_{Config.TARGET_CLASS}_annotations.json"), "w", encoding="utf-8") as f:
+        json.dump(annotations, f)
+    
+    #initiating a progress bar
+    progress_bar = tqdm(total=len(annotations), desc="Processing images", unit="image")
+    
+    # IMAGE PREPROCESSING
+    # if verbose: print("Processing images ...")
+    for idx, record in annotations.items():
+        
+        img_name = record["tooth_img_name"]
+        img_path = os.path.join(image_dir,img_name)
         
         if not os.path.exists(img_path):
             continue
         
-        image = cv2.imread(img_path)
+        image = io.imread(img_path)
         if image is None:
+            print(f"Error loading image: {img_path}. jumping to next image...")
             continue
-        
-        # Crop
-        cropped_img = crop_tooth_region(image, (x, y, w, h))
-        
-        # Mask
+        if Config.NORMALIZE_IMAGES:
+            image = dental_gray_world_white_balance(image)
+                # Mask
         if mask_bg:
-            cropped_img = mask_background(cropped_img)
+            image = mask_background(image, record["tooth_poly"])
         
-        # Save to <output_dir>/<label> subfolder
-        label_dir = os.path.join(output_dir, label)
-        os.makedirs(label_dir, exist_ok=True)
+        # Pad and resize
+        image = pad_and_resize(image, target_dim=target_dim, mask_value=Config.MASK_VALUE)
         
         # Construct output filename
-        base_name = os.path.basename(img_path)
-        out_name = f"{os.path.splitext(base_name)[0]}_cropped.jpg"
-        out_path = os.path.join(label_dir, out_name)
+        out_path = os.path.join(output_dir, img_name)
         
-        cv2.imwrite(out_path, cropped_img)
+        io.imsave(out_path, image)
+        # print(f"Saved: {out_path}")
+        
+        progress_bar.update(1)
+    
+    progress_bar.close()
+    if verbose: print("Done pre-processing the dataset.")
 
-def split_dataset(
-    images_dir: str = config.IMAGE_DIR,
-    train_ratio: float = config.TRAIN_RATIO,
-    val_ratio: float = config.VAL_RATIO,
-    test_ratio: float = config.TEST_RATIO,
-    random_seed: int = config.RANDOM_SEED
-) -> Dict[str, List[str]]:
-    """
-    Splits the processed dataset into train, val, test sets.
-    Assumes a directory structure like:
-        images_dir/plaque/*.jpg
-        images_dir/no_plaque/*.jpg
     
-    Returns a dictionary with keys: 'train', 'val', 'test', 
-    each containing a list of image paths.
+def split_dataset_json(master_json_path: str,
+                       output_dir: str,
+                       train_ratio: float = Config.TRAIN_RATIO,
+                       val_ratio: float = Config.VAL_RATIO,
+                       test_ratio: float = Config.TEST_RATIO,
+                       random_seed: int = Config.RANDOM_SEED) -> tuple:
     """
-    random.seed(random_seed)
+    Loads the master dataset JSON and splits it into train, validation, and test sets stratified by target_class.
+    Writes three JSON files to output_dir with the same structure as the master JSON.
     
-    all_image_paths = []
-    for label in os.listdir(images_dir):
-        label_path = os.path.join(images_dir, label)
-        if not os.path.isdir(label_path):
-            continue
-        img_paths = glob.glob(os.path.join(label_path, "*.jpg"))
+    Args:
+        master_json_path (str): Path to the master JSON dataset.
+        output_dir (str): Directory where the split JSON files will be saved.
+        train_ratio (float): Fraction of records for training.
+        val_ratio (float): Fraction of records for validation.
+        test_ratio (float): Fraction of records for testing.
+        random_seed (int): Random seed for reproducibility.
         
-        # Shuffle and split
-        random.shuffle(img_paths)
-        all_image_paths.extend([(p, label) for p in img_paths])
+    Returns:
+        tuple: (train_json, val_json, test_json) dictionaries.
+    """
+
+    # Load the master JSON data (assumed to be a dictionary keyed by record IDs)
+    with open(master_json_path, 'r', encoding='utf-8') as f:
+        data = json.load(f)
     
-    random.shuffle(all_image_paths)
-    total = len(all_image_paths)
-    train_count = int(train_ratio * total)
-    val_count = int(val_ratio * total)
+    # Create a list of record IDs and corresponding target classes.
+    records = list(data.items())  # Each item is a tuple (record_id, record)
+    record_ids = [rec_id for rec_id, rec in records]
+    target_classes = [rec["target_class"] for rec_id, rec in records]
     
-    train_samples = all_image_paths[:train_count]
-    val_samples = all_image_paths[train_count : train_count + val_count]
-    test_samples = all_image_paths[train_count + val_count :]
+    # First, split off the training set.
+    train_ids, temp_ids, _, temp_targets = train_test_split(
+        record_ids, target_classes,
+        test_size=(1-train_ratio),
+        random_state=random_seed,
+        stratify=target_classes
+    )
     
-    return {
-        "train": train_samples,
-        "val": val_samples,
-        "test": test_samples
-    }
+    # Among the remaining records, split them into validation and test.
+    # Compute the fraction of val from the remaining records.
+    val_frac = val_ratio / (val_ratio + test_ratio)
+    
+    val_ids, test_ids, _, _ = train_test_split(
+        temp_ids, temp_targets,
+        test_size=(1 - val_frac),
+        random_state=random_seed,
+        stratify=temp_targets
+    )
+    
+    # Build dictionaries for each split preserving the same structure.
+    train_json = {rec_id: data[rec_id] for rec_id in train_ids}
+    val_json   = {rec_id: data[rec_id] for rec_id in val_ids}
+    test_json  = {rec_id: data[rec_id] for rec_id in test_ids}
+    
+    # Ensure output directory exists and save the splits to JSON files.
+    os.makedirs(output_dir, exist_ok=True)
+    with open(os.path.join(output_dir, f"{Config.TARGET_CLASS}_train.json"), 'w', encoding='utf-8') as f:
+        json.dump(train_json, f, indent=2)
+    with open(os.path.join(output_dir, f"{Config.TARGET_CLASS}_val.json"), 'w', encoding='utf-8') as f:
+        json.dump(val_json, f, indent=2)
+    with open(os.path.join(output_dir, f"{Config.TARGET_CLASS}_test.json"), 'w', encoding='utf-8') as f:
+        json.dump(test_json, f, indent=2)
+    
+    return train_json, val_json, test_json
+
+
 
 def build_tf_dataset(
-    samples: List[Tuple[str, str]],
-    batch_size: int = 32,
-    shuffle: bool = True,
-    augment: bool = False
+    records: Dict[str, dict],
+    batch_size: int = Config.BATCH_SIZE,
+    shuffle: bool = Config.SHUFFLE_DATASET,
+    augment: bool = Config.AUGMENT_DATA,
 ) -> tf.data.Dataset:
     """
     Builds a TensorFlow Dataset from a list of (image_path, label) tuples.
@@ -605,8 +690,23 @@ def build_tf_dataset(
         # Read image
         image = tf.io.read_file(image_path)
         image = tf.image.decode_jpeg(image, channels=3)
-        image = tf.image.resize(image, (224, 224))  # or any dimension
+        image = tf.image.resize(image, (Config.TARGET_DIM, Config.TARGET_DIM))  # or any dimension
         image = image / 255.0  # scale to [0, 1]
+        
+        # Mask the background using the helper function if requested.
+        # Wrap the NumPy-based mask_background() into a TF op using tf.numpy_function.
+        # if mask_bg:
+        #     # Call mask_background() with image and tooth_poly.
+        #     # Note: tooth_poly is assumed to be a dict containing keys "all_points_x" and "all_points_y".
+        #     image = tf.numpy_function(
+        #         func=lambda img, poly: mask_background(img, poly),
+        #         inp=[image, tooth_poly],
+        #         Tout=image.dtype
+        #     )
+        #     # Propagate the image shape information.
+        #     image.set_shape((Config.TARGET_DIM, Config.TARGET_DIM, 3))
+        if Config.NORMALIZE_IMAGES:
+            image = tf.numpy_function( func= lambda img: dental_gray_world_white_balance(img), inp=[image], Tout=image.dtype)
         
         # Optional: augment
         if augment:
@@ -616,9 +716,9 @@ def build_tf_dataset(
             image = tf.image.random_brightness(image, max_delta=0.1)
         
         # Convert label (string) to an integer class if needed
-        # For instance, if you have "plaque" -> 1, "no_plaque" -> 0
+        # For instance, if you have "pla" -> 1, "no_plaque" -> 0
         label_int = tf.cond(
-            tf.math.equal(label, tf.constant("plaque")),
+            tf.math.equal(label, tf.constant(Config.TARGET_CLASS)),
             lambda: tf.constant(1, dtype=tf.int32),
             lambda: tf.constant(0, dtype=tf.int32)
         )
@@ -626,8 +726,11 @@ def build_tf_dataset(
         return image, label_int
 
     # Convert the samples to a TF Dataset
-    paths = [s[0] for s in samples]
-    labels = [s[1] for s in samples]
+    paths = []
+    labels = []
+    for key, record in records.items():
+        paths.append(os.path.join(os.path.join(Config.DATA_DIR, Config.IMAGE_DIR), record["tooth_img_name"]))
+        labels.append(record["target_class"])
     
     ds = tf.data.Dataset.from_tensor_slices((paths, labels))
     ds = ds.map(
@@ -636,7 +739,7 @@ def build_tf_dataset(
     )
     
     if shuffle:
-        ds = ds.shuffle(buffer_size=len(samples), reshuffle_each_iteration=True)
+        ds = ds.shuffle(buffer_size=len(records), reshuffle_each_iteration=True)
     
     ds = ds.batch(batch_size)
     ds = ds.prefetch(tf.data.AUTOTUNE)
