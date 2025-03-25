@@ -535,7 +535,11 @@ def preprocess_dataset(
     image_dir: str = Config.IMAGE_DIR,
     target_dim: int = Config.TARGET_DIM,
     mask_bg: bool = Config.MASK_BG,
-    verbose: bool = False
+    mask_value: int = Config.MASK_VALUE,
+    verbose: bool = False,
+    target_class_name: str = Config.TARGET_CLASS,
+    remove_dark_images: bool = Config.REMOVE_DARK_IMAGES,
+    normalize_images: bool = Config.NORMALIZE_IMAGES
 ) -> None:
     """
     Goes through each annotation, loads image, pads and resizes,
@@ -551,7 +555,7 @@ def preprocess_dataset(
         annotations = json.load(f) 
     
     #filtering out the dark images
-    if Config.REMOVE_DARK_IMAGES:
+    if remove_dark_images:
         if verbose: print("Filtering out dark images...")
         annotations = remove_dark_images_from_json(annotations, image_dir)
         print(f"Number of filtered annotations: {len(annotations)}")
@@ -563,7 +567,7 @@ def preprocess_dataset(
     print(f"Number of annotations: {len(annotations)}")
 
     annotations = convert_int32_to_int(annotations)
-    with open(os.path.join(output_dir,f"filtered_{Config.TARGET_CLASS}_annotations.json"), "w", encoding="utf-8") as f:
+    with open(os.path.join(output_dir,f"filtered_{target_class_name}_annotations.json"), "w", encoding="utf-8") as f:
         json.dump(annotations, f)
     
     #initiating a progress bar
@@ -583,14 +587,14 @@ def preprocess_dataset(
         if image is None:
             print(f"Error loading image: {img_path}. jumping to next image...")
             continue
-        if Config.NORMALIZE_IMAGES:
+        if normalize_images:
             image = dental_gray_world_white_balance(image)
                 # Mask
         if mask_bg:
             image = mask_background(image, record["tooth_poly"])
         
         # Pad and resize
-        image = pad_and_resize(image, target_dim=target_dim, mask_value=Config.MASK_VALUE)
+        image = pad_and_resize(image, target_dim=target_dim, mask_value= mask_value)
         
         # Construct output filename
         out_path = os.path.join(output_dir, img_name)
@@ -677,6 +681,11 @@ def build_tf_dataset(
     batch_size: int = Config.BATCH_SIZE,
     shuffle: bool = Config.SHUFFLE_DATASET,
     augment: bool = Config.AUGMENT_DATA,
+    image_size: tuple[int, int] = (Config.TARGET_DIM, Config.TARGET_DIM),
+    target_class_name: str = Config.TARGET_CLASS,
+    data_parent_dir: str = Config.DATA_DIR,
+    image_dir: str = Config.IMAGE_DIR,
+    normalize_images: bool = Config.NORMALIZE_IMAGES
 ) -> tf.data.Dataset:
     """
     Builds a TensorFlow Dataset from a list of (image_path, label) tuples.
@@ -690,7 +699,7 @@ def build_tf_dataset(
         # Read image
         image = tf.io.read_file(image_path)
         image = tf.image.decode_jpeg(image, channels=3)
-        image = tf.image.resize(image, (Config.TARGET_DIM, Config.TARGET_DIM))  # or any dimension
+        image = tf.image.resize(image, image_size)  # or any dimension
         image = image / 255.0  # scale to [0, 1]
         
         # Mask the background using the helper function if requested.
@@ -705,7 +714,7 @@ def build_tf_dataset(
         #     )
         #     # Propagate the image shape information.
         #     image.set_shape((Config.TARGET_DIM, Config.TARGET_DIM, 3))
-        if Config.NORMALIZE_IMAGES:
+        if normalize_images:
             image = tf.numpy_function( func= lambda img: dental_gray_world_white_balance(img), inp=[image], Tout=image.dtype)
         
         # Optional: augment
@@ -718,7 +727,7 @@ def build_tf_dataset(
         # Convert label (string) to an integer class if needed
         # For instance, if you have "pla" -> 1, "no_plaque" -> 0
         label_int = tf.cond(
-            tf.math.equal(label, tf.constant(Config.TARGET_CLASS)),
+            tf.math.equal(label, tf.constant(target_class_name)),
             lambda: tf.constant(1, dtype=tf.int32),
             lambda: tf.constant(0, dtype=tf.int32)
         )
@@ -729,7 +738,7 @@ def build_tf_dataset(
     paths = []
     labels = []
     for key, record in records.items():
-        paths.append(os.path.join(os.path.join(Config.DATA_DIR, Config.IMAGE_DIR), record["tooth_img_name"]))
+        paths.append(os.path.join(os.path.join(data_parent_dir, image_dir), record["tooth_img_name"]))
         labels.append(record["target_class"])
     
     ds = tf.data.Dataset.from_tensor_slices((paths, labels))
