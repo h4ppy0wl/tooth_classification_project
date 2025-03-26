@@ -7,7 +7,7 @@ from tensorflow.keras.applications.resnet import preprocess_input as resnet_prep
 from tensorflow.keras.applications.inception_v3 import preprocess_input as inception_preprocess
 from tensorflow.keras.applications.efficientnet import preprocess_input as effnet_preprocess
 from src.config import Config
-from tensorflow.keras.applications.resnet
+
 
 def build_pretrained_model(architecture, 
                             input_shape: tuple[int,int,int],
