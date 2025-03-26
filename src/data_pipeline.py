@@ -273,36 +273,6 @@ def remove_dark_images_from_json(json_data: dict, image_base_path: str) -> dict:
             filtered_data[key] = entry
     return filtered_data
 
-def parse_json(json_path: str = Config.ANNOTATION_FILE) -> list:
-    """
-    This function is the first step in loading the training specific json file.
-    It reads the json file and returns the data as a dictionary.
-    Args:
-        json_path: path to the json file
-        
-    Returns: a list of dicts, each containing the following
-            {
-            'image_path': str,
-            'bbox': [xmin, ymin, w, h],
-            'label': 0/1
-            }
-    """
-    with open(json_path, 'r') as f:
-        data = json.load(f)
-
-    records = []
-    for item in data:  # each item is one full image
-        image_path = item['tooth_image_path']
-        for tooth in item['teeth']:
-            r = {
-                'image_path': image_path,
-                'bbox': tooth['bbox'],
-                'label': tooth['label']
-            }
-            records.append(r)
-    return records
-
-
 def parse_dataset_json(json_path: str, config: Config) -> list:
     """
     Reads a JSON file containing a list of samples and returns an oversampled list of records.
@@ -356,7 +326,6 @@ def parse_dataset_json(json_path: str, config: Config) -> list:
     random.shuffle(all_records)
 
     return all_records
-
 
 def smooth_polygon(polygon: dict, config: Config) -> dict:
     """
