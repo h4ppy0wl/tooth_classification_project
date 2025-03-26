@@ -302,27 +302,63 @@ def parse_json(json_path: str = Config.ANNOTATION_FILE) -> list:
             records.append(r)
     return records
 
-def load_image_paths(data_dir: str) -> List[str]:
-    """
-    Recursively find image files (e.g., .jpg, .png) under data_dir.
-    Returns a list of file paths.
-    """
-    image_paths = glob.glob(os.path.join(data_dir, "**", "*.jpg"), recursive=True)
-    # Also handle other extensions if needed
-    # image_paths += glob.glob(os.path.join(data_dir, "**", "*.png"), recursive=True)
-    return image_paths
 
-def crop_tooth_region(image: np.ndarray, bbox: Tuple[int, int, int, int]) -> np.ndarray:
+def parse_dataset_json(json_path: str, config: Config) -> list:
     """
-    Crop an image to a bounding box (x, y, width, height).
-    This bounding box presumably comes from a tooth detection/annotation step.
-    Returns the cropped tooth region.
+    Reads a JSON file containing a list of samples and returns an oversampled list of records.
+    
+    Each record is a dictionary with fields:
+        - 'image_filename': str, path to the image file
+        - 'mask_polygon': any shape/format you store the polygon in
+        - 'label': int (e.g., 1 for 'with plaque', 0 for 'without plaque')
+        - 'augmentation_label': bool (True if this record should be augmented)
+    
+    The oversampling rate for 'with plaque' examples is defined by config.oversample_factor.
     """
-    x, y, w, h = bbox
-    cropped = image[y:y+h, x:x+w]
-    return cropped
+    # 1) Read the JSON file
+    with open(json_path, 'r') as f:
+        data = json.load(f)  # Expecting a list of dicts
 
-def smooth_polygon(polygon: dict, tolerance: float = Config.POLYGON_SMOOTHING_TOLERANCE) -> dict:
+    # 2) Build a list of base records (augmentation_label=False by default)
+    records = []
+    for item in data:  # each item is one full image
+        image_path = item['tooth_image_path']
+        for tooth in item['teeth']:
+            r = {
+                'image_path': image_path,
+                'bbox': tooth['bbox'],
+                'label': tooth['label'],
+                'augmentation_label': False
+            }
+            records.append(r)
+            
+    if config.OVERSAMPLE_FACTOR == 1:
+        random.shuffle(records)
+        return records
+    # 3) Separate "with plaque" (label==1) from "without plaque" (label==0)
+    with_plaque_records = [r for r in records if r['label'] == config.TARGET_CLASS]
+    # Optionally, you can also do: without_plaque_records = [r for r in records if r['label'] != config.TARGET_CLASS]
+
+    # 4) Create extra copies of the minority (with plaque) records 
+    #    and set augmentation_label=True for them
+    oversampled_records = []
+    # E.g., if oversample_factor=3, each with-plaque record is repeated 2 additional times
+    for r in with_plaque_records:
+        for _ in range(config.OVERSAMPLE_FACTOR - 1):
+            new_record = r.copy()
+            new_record['augmentation_label'] = True
+            oversampled_records.append(new_record)
+
+    # 5) Merge original + extra augmented records
+    all_records = records + oversampled_records
+
+    # 6) Shuffle so the augmented records are interspersed randomly
+    random.shuffle(all_records)
+
+    return all_records
+
+
+def smooth_polygon(polygon: dict, config: Config) -> dict:
     """
     Smooths the jagged borders of a polygon by approximating its shape with fewer vertices.
 
@@ -343,7 +379,7 @@ def smooth_polygon(polygon: dict, tolerance: float = Config.POLYGON_SMOOTHING_TO
     points = np.array([polygon["all_points_x"], polygon["all_points_y"]]).T
 
     # Approximate the polygon with the given tolerance to smooth its borders.
-    smoothed_points = skimage.measure.approximate_polygon(points, tolerance)
+    smoothed_points = skimage.measure.approximate_polygon(points, config.POLYGON_SMOOTHING_TOLERANCE)
 
     # Convert the smoothed points back to integer coordinates.
     smoothed_polygon = {
@@ -353,7 +389,7 @@ def smooth_polygon(polygon: dict, tolerance: float = Config.POLYGON_SMOOTHING_TO
 
     return smoothed_polygon
 
-def mask_background(image: np.ndarray, polygon: dict, mask_value: int=Config.MASK_VALUE) -> np.ndarray:
+def mask_background(image: np.ndarray, polygon: dict, config: Config) -> np.ndarray:
     """
     Masks the background of an image outside a specified polygon.
 
@@ -371,6 +407,10 @@ def mask_background(image: np.ndarray, polygon: dict, mask_value: int=Config.MAS
     """
     height, width = image.shape[:2]
     mask = np.zeros((height, width), dtype=np.uint8)
+    
+    if config.MASK_POLYGON_SMOOTHING:
+        polygon = smooth_polygon(polygon, config)
+    
     all_points_x = np.array(polygon["all_points_x"], dtype=np.int32)
     all_points_y = np.array(polygon["all_points_y"], dtype=np.int32)
     rr, cc = skimage.draw.polygon(all_points_y, all_points_x, shape=mask.shape)
@@ -380,6 +420,7 @@ def mask_background(image: np.ndarray, polygon: dict, mask_value: int=Config.MAS
     masked_image = image.copy()
 
     # Define the gray color using a default threshold value of 128
+    mask_value = config.MASK_VALUE
     mask_color = (mask_value, mask_value, mask_value) if image.ndim == 3 else mask_value
 
     # Replace pixels outside the polygon (mask value != 1) with gray
@@ -502,32 +543,107 @@ def pad_and_resize(image: np.ndarray, target_dim: int=Config.TARGET_DIM,
         resized = (resized * 255).astype(np.uint8)
     
     return resized
-    
-    
-    
-    
-# def load_annotations(annotation_file: str) -> pd.DataFrame:
-#     """
-#     Reads a CSV or JSON containing bounding boxes, labels (plaque, no plaque, etc.).
-#     Must match how you store your annotations.
-#     Example CSV columns could be: [image_path, x, y, w, h, label].
-#     """
-#     df = pd.read_csv(annotation_file)  # or pd.read_json, etc.
-#     return df
 
+def rescale_image(image: np.ndarray, config) -> np.ndarray:
+    """
+    Rescales an image's pixel values to a target range defined in config.rescale_pixels.
+    Also, if the image's dtype differs from config.IMAGE_PVALUE_TYPE, it is converted.
 
-'''
-    {
-      'tooth_img_name': <tooth_image_filename>,
-      'tooth_number': <tooth_number>,
-      'target_class': class name/ no_ ,
-      'tooth_poly': {
-          'all_points_x': [...],
-          'all_points_y': [...]
-      },
-      ...
-    }
-'''
+    The function first determines if the input image is in the [0,1] or [0,255] range by 
+    checking the maximum pixel value. It then applies a linear transformation so that the 
+    image values map to the target range (e.g. [0,1], [-1,1], or [0,255]).
+
+    Parameters:
+        image (np.ndarray): The input image.
+        config: A configuration object containing:
+            - rescale_pixels: A tuple/list with two numbers (target_min, target_max).
+            - IMAGE_PVALUE_TYPE: The desired numpy dtype for the image (e.g., np.uint8 or np.float32).
+
+    Returns:
+        np.ndarray: The rescaled image with pixel values in the target range and of type config.IMAGE_PVALUE_TYPE.
+    """
+    # Convert image type if necessary.
+    if image.dtype != config.IMAGE_PVALUE_TYPE:
+        image = image.astype(config.IMAGE_PVALUE_TYPE)
+
+    # Determine input range.
+    # If the maximum value is <= 1, assume the image range is [0, 1]; otherwise [0, 255].
+    if image.max() <= 1.0:
+        input_min, input_max = 0.0, 1.0
+    else:
+        input_min, input_max = 0.0, 255.0
+
+    target_min, target_max = config.RESCALE_PIXELS
+
+    # Clip the image to the detected input range.
+    image = np.clip(image, input_min, input_max)
+
+    # Avoid division by zero for constant images.
+    if input_max == input_min:
+        return np.full(image.shape, target_min, dtype=config.IMAGE_PVALUE_TYPE)
+
+    # Apply linear transformation to map input range to target range.
+    scaled_image = (image - input_min) / (input_max - input_min) * (target_max - target_min) + target_min
+
+    # If target type is integer, round the values before casting.
+    if config.IMAGE_PVALUE_TYPE in [np.uint8, np.int32, np.int16]:
+        scaled_image = np.round(scaled_image).astype(config.IMAGE_PVALUE_TYPE)
+    else:
+        scaled_image = scaled_image.astype(config.IMAGE_PVALUE_TYPE)
+
+    return scaled_image
+
+def preprocess_record(
+    record: Dict, # dict of {'image_path': image_path,'poly': tooth['bbox'], 'label': tooth['label'],'augmentation_label': False}
+    config: Config,
+) -> Tuple[np.ndarray, int]:
+    """
+        Preprocess a single record in the tooth classification data pipeline.
+        This function loads an image specified by the input record, applies various
+        preprocessing steps such as white-balancing, background masking, padding/resizing,
+        and optional pixel rescaling based on the configuration provided. The input record
+        is expected to be a tuple containing the image filename, its corresponding tooth
+        polygon/mask, and an associated label.
+        Parameters:
+            record (Tuple[str, Dict, int]): A tuple containing:
+                - image_filename (str): The filename of the image to be processed.
+                - tooth_poly (Dict): A dictionary representing the tooth polygon/mask.
+                - label (int): The label associated with the image.
+            config (Config): A configuration object that includes preprocessing settings, 
+                            notably for pixel rescaling (e.g., in the attribute RESCALE_PIXELS).
+        Returns:
+            Tuple[np.ndarray, int]: A tuple containing the preprocessed image as a NumPy array
+            and its corresponding label.
+        Raises:
+            FileNotFoundError: If the image file does not exist.
+            ValueError: If the image cannot be read.
+    """
+    
+    # IMAGE PREPROCESSING
+    img_name = record[0]
+    img_path = os.path.join(config.DATA_DIR, config.IMAGE_DIR, img_name)
+    
+    if not os.path.exists(img_path):
+        raise FileNotFoundError(f"Image not found: {img_path}")
+    
+    image = io.imread(img_path)
+    if image is None:
+        raise ValueError(f"Failed to read image: {img_path}")
+    
+    if config.NORMALIZE_IMAGES:
+        image = dental_gray_world_white_balance(image)
+    # Mask
+    if config.MASK_BG:
+        image = mask_background(image, record[1])
+    
+    # Pad and resize
+    image = pad_and_resize(image, target_dim=config.TARGET_DIM, mask_value= config.MASK_VALUE)
+    
+    #rescale:
+    if config.RESCALE_PIXELS[0] is not None:
+        image = rescale_image(image, config)
+
+    return image, record[2]
 
 def preprocess_dataset(
     json_annotations_path: str,#: pd.DataFrame,
@@ -589,7 +705,7 @@ def preprocess_dataset(
             continue
         if normalize_images:
             image = dental_gray_world_white_balance(image)
-                # Mask
+        # Mask
         if mask_bg:
             image = mask_background(image, record["tooth_poly"])
         
@@ -606,7 +722,6 @@ def preprocess_dataset(
     
     progress_bar.close()
     if verbose: print("Done pre-processing the dataset.")
-
     
 def split_dataset_json(master_json_path: str,
                        output_dir: str,
@@ -699,8 +814,8 @@ def build_tf_dataset(
         # Read image
         image = tf.io.read_file(image_path)
         image = tf.image.decode_jpeg(image, channels=3)
-        image = tf.image.resize(image, image_size)  # or any dimension
-        image = image / 255.0  # scale to [0, 1]
+        # image = tf.image.resize(image, image_size)  # or any dimension
+        # image = image / 255.0  # scale to [0, 1]
         
         # Mask the background using the helper function if requested.
         # Wrap the NumPy-based mask_background() into a TF op using tf.numpy_function.
@@ -715,7 +830,7 @@ def build_tf_dataset(
         #     # Propagate the image shape information.
         #     image.set_shape((Config.TARGET_DIM, Config.TARGET_DIM, 3))
         if normalize_images:
-            image = tf.numpy_function( func= lambda img: dental_gray_world_white_balance(img), inp=[image], Tout=image.dtype)
+            image = tf.numpy_function(func= lambda img: dental_gray_world_white_balance(img), inp=[image], Tout=image.dtype)
         
         # Optional: augment
         if augment:

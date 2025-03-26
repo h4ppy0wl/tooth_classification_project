@@ -167,46 +167,50 @@ import tensorflow as tf
 import numpy as np
 from skimage import io
 import os
+from typing import Tuple, Dict
 from src.config import Config
 
 # Assume these functions are imported from your module:
 # dental_gray_world_white_balance, mask_background, pad_and_resize
 
-def tf_preprocess_image(image_path):
+def tf_preprocess_image(record: Tuple(str, Dict, int), config):
     """
     Wraps your existing Python preprocessing logic for use in a tf.data pipeline.
     This function reads, decodes, and applies your processing (white balance, optional masking,
     and pad/resize) to a given image path.
     """
-    def _preprocess(path):
+    def _preprocess(record, config):
         # path is a numpy string
-        path_str = path.decode("utf-8")
+        path_str = record[0].decode("utf-8")
         # Load the image
         if not os.path.exists(path_str):
             # Return a dummy image if not exists.
-            return np.zeros(Config.INPUT_SHAPE, dtype=np.uint8)
+            raise FileNotFoundError(f"Image not found: {path_str}")
+        
         image = io.imread(path_str)
         if image is None:
-            return np.zeros(Config.INPUT_SHAPE, dtype=np.uint8)
+            raise ValueError(f"Failed to read image: {path_str}")
+        
         # Optionally normalize/white balance        
-        if Config.NORMALIZE_IMAGES:
+        if config.NORMALIZE_IMAGES:
             image = dental_gray_world_white_balance(image)
-        # Optionally mask background; if required you need the polygon
-        # Here, you may load a polygon or pass it in via additional logic.
-        # For this example, we'll assume masking is desired.
-        # You must modify this if you have the polygon info attached to each filepath.
-        if Config.MASK_BG:
-            # Dummy polygon for example; replace with actual polygon if available.
-            dummy_poly = {"all_points_x": [0, image.shape[1]], "all_points_y": [0, image.shape[0]]}
-            image = mask_background(image, dummy_poly)
+            
+        # rescale if required
+        if config.rescale_pixels[0] is not None:
+            image = np.clip(image, config.rescale_pixels[0], config.rescale_pixels[1])
+            image = (image - config.rescale_pixels[0]) / (config.rescale_pixels[1] - config.rescale_pixels[0])
+            
+        # mask background
+        if config.MASK_BG:
+            image = mask_background(image, record[1])
         # Pad and resize image
-        image = pad_and_resize(image, target_dim=Config.TARGET_DIM, mask_value=Config.MASK_VALUE)
+        image = pad_and_resize(image, target_dim=config.TARGET_DIM, mask_value=config.MASK_VALUE)
         return image.astype(np.float32)  # Ensure data type compatibility
 
     # Wrap the _preprocess function into a tf.py_function.
-    image = tf.py_function(func=_preprocess, inp=[image_path], Tout=tf.float32)
+    image = tf.py_function(func=_preprocess, inp=[record, config], Tout=tf.float32)
     # Set static shape so that downstream ops know the dimensions.
-    image.set_shape(Config.INPUT_SHAPE)
+    image.set_shape(config.INPUT_SHAPE)
     return image
 
 

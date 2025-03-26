@@ -1,3 +1,4 @@
+import numpy as np
 from dataclasses import dataclass
 
 @dataclass
@@ -34,6 +35,10 @@ class Config:
         FINE_TUNE_FROM_LAYER (int): Layer index from which to unfreeze for fine-tuning.
         DARK_IMAGE_THRESHOLD (float): Threshold for determining dark images.
         POLYGON_SMOOTHING_TOLERANCE (float): Tolerance for smoothing tooth polygons.
+
+        IMAGE_PVALUE_TYPE: np.dtype  # Image pixel value type (e.g., np.float32)
+        RESCALE_PIXELS: list  # Rescale pixel values for example to [-1, 1]
+        OVERSAMPLE_FACTOR: int # Oversampling factor for minority classes. ((OVERSAMPLE_FACTOR-1) * num_minority_samples ) augmentations will be added to the dataset
     """
 
     IMAGE_DIR: str = "data/processed"
@@ -69,4 +74,10 @@ class Config:
     FINE_TUNE_FROM_LAYER: int = 22
     
     DARK_IMAGE_THRESHOLD: float = 0.25
-    POLYGON_SMOOTHING_TOLERANCE: float = 0.015
+    MASK_POLYGON_SMOOTHING: bool = False
+    POLYGON_SMOOTHING_TOLERANCE: float = 0.015 
+    IMAGE_PVALUE_TYPE: np.dtype = np.float32 
+    RESCALE_PIXELS: list = [0, 255]
+    OVERSAMPLE_FACTOR: int = 4 
+    
+    
