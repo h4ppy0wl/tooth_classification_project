@@ -38,32 +38,42 @@ class Config:
 
         IMAGE_PVALUE_TYPE: np.dtype  # Image pixel value type (e.g., np.float32)
         RESCALE_PIXELS: list  # Rescale pixel values for example to [-1, 1]
-        OVERSAMPLE_FACTOR: int # Oversampling factor for minority classes. ((OVERSAMPLE_FACTOR-1) * num_minority_samples ) augmentations will be added to the dataset
+        OVERSAMPLE_FACTOR: int # Oversampling factor for minority classes. 
+                                ((OVERSAMPLE_FACTOR-1) * num_minority_samples ) number of augmentations from the target class will be added to the dataset.
+                                Because we have considered the target class to be the minority class in the master dataset.
+                                The factor can be the majority/minority ratio.
     """
 
-    IMAGE_DIR: str = "data/processed"
-    ANNOTATION_FILE: str = "data/annotations.json"
+    IMAGE_DIR: str = "data/raw"
+    ANNOTATION_FILE: str = "data/interim"
     OUTPUT_DIR: str = "data/processed"
     DATA_DIR: str = "C:/Users/anedaeij23/Project/tooth_classification_project"
     
     TARGET_DIM: int = 256
     INPUT_SHAPE: tuple = (TARGET_DIM, TARGET_DIM, 3)
     MASK_VALUE: int = 0
-    ANTIALIZING_IN_RESIZING: bool = True
+    ANTIALIZING_IN_RESIZING: bool = False
     
-    TRAIN_RATIO: float = 0.8
-    VAL_RATIO: float = 0.1
-    TEST_RATIO: float = 0.1
+    TARGET_CLASS: str = "Pla"
+    TRAIN_VAL_TEST_RATIOS: tuple[float, float, float] = (0.8, 0.1, 0.1)
     
     BATCH_SIZE: int = 32
     RANDOM_SEED: int = 42
-    AUGMENT_DATA: bool = False
+    AUGMENT_DATA: bool = True
     SHUFFLE_DATASET: bool = True
-    NORMALIZE_IMAGES: bool = False
+    NORMALIZE_IMAGES: bool = True
     MASK_BG: bool = True
     REMOVE_DARK_IMAGES: bool = True
     
-    TARGET_CLASS: str = "Pla"
+    DARK_IMAGE_THRESHOLD: float = 0.25
+    MASK_POLYGON_SMOOTHING: bool = False
+    POLYGON_SMOOTHING_TOLERANCE: float = 0.015 
+    IMAGE_PVALUE_TYPE: np.dtype = np.float32 
+    RESCALE_PIXELS: tuple = (0, 255)
+    OVERSAMPLE_FACTOR: int = 3 
+    
+    
+    
     MODEL_ARCHITECTURE: str = "resnet50"
     L2_REGULARIZATION: float = 0.001
     DROPOUT_RATE: float = 0.5
@@ -73,11 +83,6 @@ class Config:
     FINE_TUNE_LR: float = 1e-4
     FINE_TUNE_FROM_LAYER: int = 22
     
-    DARK_IMAGE_THRESHOLD: float = 0.25
-    MASK_POLYGON_SMOOTHING: bool = False
-    POLYGON_SMOOTHING_TOLERANCE: float = 0.015 
-    IMAGE_PVALUE_TYPE: np.dtype = np.float32 
-    RESCALE_PIXELS: list = [0, 255]
-    OVERSAMPLE_FACTOR: int = 4 
+
     
     
