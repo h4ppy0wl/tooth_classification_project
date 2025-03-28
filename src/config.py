@@ -72,8 +72,8 @@ class Config:
     
     DARK_IMAGE_THRESHOLD: float = 0.25
     MASK_POLYGON_SMOOTHING: bool = False
-    POLYGON_SMOOTHING_TOLERANCE: float = 0.015 
-    IMAGE_PVALUE_TYPE: np.dtype = np.float32 
+    POLYGON_SMOOTHING_TOLERANCE: float = 0.015
+    IMAGE_PVALUE_TYPE: np.dtype = np.float32
     RESCALE_PIXELS: tuple = (0, 255) #define based on model requirement. resnet 
     OVERSAMPLE_FACTOR: int = 3 
     
@@ -81,9 +81,9 @@ class Config:
     MODEL_ARCHITECTURE: str = "resnet50"
     L2_REGULARIZATION: float = 0.001
     DROPOUT_RATE: float = 0.5
-    INITIAL_LR: float = 1e-3
-    NUM_INITIAL_EPOCHS: int = 10
-    NUM_FINE_TUNE_EPOCHS: int = 10
+    INITIAL_LR: float = 1e-1
+    NUM_INITIAL_EPOCHS: int = 2
+    NUM_FINE_TUNE_EPOCHS: int = 2
     FINE_TUNE_LR: float = 1e-4
     FINE_TUNE_FROM_LAYER: int = 22
     

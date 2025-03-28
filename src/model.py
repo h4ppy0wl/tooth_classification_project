@@ -28,16 +28,6 @@ def build_pretrained_model(architecture,
                               input_shape=input_shape)
         preprocess_func = resnet_preprocess
 
-    elif architecture.lower() == 'inceptionv3':
-        base_model = InceptionV3(weights='imagenet', include_top=False,
-                                 input_shape=input_shape)
-        preprocess_func = inception_preprocess
-
-    elif architecture.lower() == 'efficientnetb0':
-        base_model = EfficientNetB0(weights='imagenet', include_top=False,
-                                    input_shape=input_shape)
-        preprocess_func = effnet_preprocess
-
     else:
         raise ValueError(f"Unknown architecture: {architecture}. Choose from {architectures}")
 
@@ -62,7 +52,7 @@ def build_pretrained_model(architecture,
     x = tf.keras.layers.Lambda(preprocess_func, name="preprocessing_layer")(inputs)
     
     # Pass preprocessed inputs through the base model.
-    x = base_model(x)
+    features = base_model(x)
 
 
     # Add a custom classification head
@@ -73,11 +63,11 @@ def build_pretrained_model(architecture,
     # output = layers.Dense(1, activation='sigmoid')(x)
     
     # option 2: GlobalAveragePooling2D + BN + Dense256 + Dropout05 + Dense
-    x = layers.GlobalAveragePooling2D()(x)
-    x = layers.BatchNormalization()(x)  # helps with feature scale
-    x = layers.Dense(256, activation='relu', kernel_regularizer=tf.keras.regularizers.l2(Config.L2_REGULARIZATION))(x)
-    x = layers.Dropout(Config.DROPOUT_RATE)(x)
-    output = layers.Dense(1, activation='sigmoid')(x)
+    gap = layers.GlobalAveragePooling2D()(features)
+    bn = layers.BatchNormalization()(gap)  # helps with feature scale
+    dns = layers.Dense(256, activation='relu', kernel_regularizer=tf.keras.regularizers.l2(Config.L2_REGULARIZATION))(bn)
+    do = layers.Dropout(Config.DROPOUT_RATE)(dns)
+    classification_output = layers.Dense(1, activation='sigmoid', name='classification_output')(do)
     
     # option 3: Flatten + Dense256 + Dropout05 + Dense
     # x = layers.Flatten()(x)  # Flatten the spatial feature maps
@@ -86,12 +76,110 @@ def build_pretrained_model(architecture,
     # output = layers.Dense(1, activation='sigmoid')(x)
     
 
-    model = Model(inputs=inputs, outputs=output, name=f'{architecture}_model')
+    model = Model(inputs=inputs, outputs=classification_output, name=f'{architecture}_model')
 
 
 
-    return model, preprocess_func
+    return model
 
+def build_pretrained_attention_model(architecture: str,
+                                        input_shape: tuple[int,int,int],
+                                        trainable_base: bool = False,
+                                        fine_tune_at: int = None
+                                    ) -> tf.keras.Model:
+    """
+    Build a transfer-learning model with a built-in attention mechanism.
+    It produces two outputs:
+        1) classification_output (sigmoid)
+        2) attention_output (spatial attention map)
+    
+    During training:
+      - You will feed class labels to 'classification_output'
+      - You will feed plaque masks (or zeros) to 'attention_output'
+
+    At inference time:
+      - You can ignore 'attention_output' and use only 'classification_output'.
+
+    Parameters:
+        architecture: str, one of {'resnet50','inceptionv3','efficientnetb0', ...}
+        input_shape: (H, W, C)
+        trainable_base: whether to unfreeze (train) the base model's layers
+        fine_tune_at: layer index from which to unfreeze. If None and trainable_base=True, unfreezes entire base model.
+
+    Returns:
+        Keras functional Model with 2 outputs. 
+    """
+    # ------------------
+    # 1) Choose Backbone
+    # ------------------
+    architectures = ['resnet50','inceptionv3','efficientnetb0']
+    arch_lower = architecture.lower()
+    
+    if arch_lower == 'resnet50':
+        base_model = ResNet50(weights='imagenet', include_top=False, input_shape=input_shape)
+        preprocess_func = resnet_preprocess
+    else:
+        raise ValueError(f"Unknown architecture {architecture}. Choose from {architectures}")
+
+    # ----------------------
+    # 2) Freeze / Fine-tune
+    # ----------------------
+    if not trainable_base:
+        # Freeze entire base model
+        base_model.trainable = False
+    else:
+        if fine_tune_at is not None:
+            # Freeze up to the specified layer
+            for layer in base_model.layers[:fine_tune_at]:
+                layer.trainable = False
+            for layer in base_model.layers[fine_tune_at:]:
+                layer.trainable = True
+        else:
+            # Unfreeze entire base model
+            base_model.trainable = True
+
+    # -----------------------------
+    # 3) Build the Attention Branch
+    # -----------------------------
+    # We'll do it in the functional style
+
+    # Input + Preprocessing
+    inputs = tf.keras.Input(shape=input_shape, name='input_image')
+    x = layers.Lambda(preprocess_func, name="preprocessing_layer")(inputs)
+
+    # Pass through pretrained backbone
+    features = base_model(x)  # shape ~ (batch, H, W, C)
+
+    # Attention map (1 channel)
+    attention_logits = layers.Conv2D(
+        filters=1,
+        kernel_size=1,
+        padding='same',
+        kernel_regularizer=tf.keras.regularizers.l2(1e-4),  # optional
+        name='attention_conv'
+    )(features)
+
+    attention_output = layers.Activation('sigmoid', name='attention_output')(attention_logits)
+    # shape ~ (batch, H, W, 1), range [0..1]
+
+    # Multiply features by attention
+    weighted_features = layers.Multiply(name='apply_attention')([features, attention_output])
+
+    # Global pooling & classification
+    gap = layers.GlobalAveragePooling2D(name='global_average_pool')(weighted_features)
+    # You can add dropout or dense layers here if desired
+    bn = layers.BatchNormalization()(gap)  # helps with feature scale
+    dns = layers.Dense(256, activation='relu', kernel_regularizer=tf.keras.regularizers.l2(Config.L2_REGULARIZATION))(bn)
+    do = layers.Dropout(Config.DROPOUT_RATE, name='gap_dropout')(dns)
+    classification_output = layers.Dense(1, activation='sigmoid', name='classification_output')(do)
+
+    # ---------------------
+    # 4) Create 2-output Model
+    # ---------------------
+    model = Model(inputs=inputs, outputs=[classification_output, attention_output],
+                    name=f'{architecture}_attention_model')
+
+    return model
 
 def build_simple_cnn(
     input_shape: tuple[int,int,int],
@@ -154,15 +242,20 @@ def create_model(
     if model_type == "simple":
         model = build_simple_cnn(
             my_config.INPUT_SHAPE,
-            base_filters=kwargs.get('base_filters', 32)
-        )
+            base_filters=kwargs.get('base_filters', 32))
+        
     elif model_type == "transfer":
-        model = build_pretrained_model(
+        model  = build_pretrained_model(
             architecture= my_config.MODEL_ARCHITECTURE,
             input_shape= my_config.INPUT_SHAPE,
             trainable_base=kwargs.get('trainable_base', False),
-            fine_tune_at=kwargs.get('fine_tune_at', None)
-        )
+            fine_tune_at=kwargs.get('fine_tune_at', None))
+        
+    elif model_type == "transfer_attention":
+        model  = build_pretrained_attention_model(architecture= my_config.MODEL_ARCHITECTURE,
+                            input_shape= my_config.INPUT_SHAPE,
+                            trainable_base=kwargs.get('trainable_base', False),
+                            fine_tune_at=kwargs.get('fine_tune_at', None))
     else:
         raise ValueError(f"Unknown model_type: {model_type}")
     

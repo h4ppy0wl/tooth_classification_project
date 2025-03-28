@@ -408,14 +408,15 @@ def convert_annotations(input_annotations: dict, target_class: str) -> dict:
     
     Each output entry has the form:
     {
-      'tooth_img_name': <tooth_image_filename>,
-      'tooth_number': <tooth_number>,
-      'target_class': class name/ no_ ,
-      'tooth_poly': {
-          'all_points_x': [...],
-          'all_points_y': [...]
-      },
-      ...
+        'tooth_img_name': <tooth_image_filename>,
+        'tooth_number': <tooth_number>,
+        'target_class': class name/ no_ ,
+        'tooth_poly': {
+            'all_points_x': [...],
+            'all_points_y': [...]
+        },
+        'rles' : [[]]
+        ...
     }
     
     Args:
@@ -438,12 +439,14 @@ def convert_annotations(input_annotations: dict, target_class: str) -> dict:
             
             # Check diagnostic_labels for plaque presence.
             class_value = 'no_'
+            rle = []
             diag_labels = tooth.get("diagnostic_labels", {})
             for diag in diag_labels.values():
                 # assuming region_class equal to "plaque" marks a positive plaque label
                 if diag.get("region_class", "").lower() == target_class.lower():
                     class_value = target_class
-                    break
+                    rle.append(diag['rle'])
+                
             
             # Extract tooth_label (only x and y coordinates)
             tooth_label = tooth.get("tooth_label", {})
@@ -456,7 +459,8 @@ def convert_annotations(input_annotations: dict, target_class: str) -> dict:
                 "tooth_img_name": tooth_img_name,
                 "tooth_number": tooth_number,
                 "target_class": class_value,
-                "tooth_poly": filtered_tooth_label
+                "tooth_poly": filtered_tooth_label,
+                "rles": rle
             }
     return output
 
