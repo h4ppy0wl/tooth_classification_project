@@ -864,7 +864,9 @@ def build_tf_dataset(
     config: Config,
 ) -> tf.data.Dataset:
     
+    # the rotation layer for augmentation needs to be created outside of the prep function and then accessed there
     random_rotation_layer = tf.keras.layers.RandomRotation(factor=(-0.1, 0.1), fill_mode= "nearest")
+    
     def _load_and_preprocess(*record_parts):
         # Call preprocess_record via tf.py_function. It returns a tuple:
         # (preprocessed image, label, augmentation flag).
