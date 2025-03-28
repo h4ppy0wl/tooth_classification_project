@@ -1,11 +1,14 @@
 # model.py
-
+import sys
+import os
 import tensorflow as tf
 from tensorflow.keras import layers, Model
 from tensorflow.keras.applications import ResNet50, InceptionV3, EfficientNetB0
 from tensorflow.keras.applications.resnet import preprocess_input as resnet_preprocess
 from tensorflow.keras.applications.inception_v3 import preprocess_input as inception_preprocess
 from tensorflow.keras.applications.efficientnet import preprocess_input as effnet_preprocess
+parent_dir = os.path.abspath(os.path.join(os.getcwd(), os.pardir))
+sys.path.append(parent_dir)
 from src.config import Config
 
 
@@ -40,7 +43,7 @@ def build_pretrained_model(architecture,
 
     
     
-    # Optionally freeze
+    # We freeze the base model in the first step to prevent weight deterioration
     if not trainable_base:
         # Freeze entire base model for initial training
         base_model.trainable = False
@@ -54,6 +57,14 @@ def build_pretrained_model(architecture,
         else:
             base_model.trainable = True
 
+    # Create an Input layer and add a Lambda layer for preprocessing.
+    inputs = tf.keras.Input(shape=input_shape)
+    x = tf.keras.layers.Lambda(preprocess_func, name="preprocessing_layer")(inputs)
+    
+    # Pass preprocessed inputs through the base model.
+    x = base_model(x)
+
+
     # Add a custom classification head
     # option 1: GlobalAveragePooling2D + Dense128 + Dropout02 + Dense
     # x = layers.GlobalAveragePooling2D()(base_model.output)
@@ -62,7 +73,7 @@ def build_pretrained_model(architecture,
     # output = layers.Dense(1, activation='sigmoid')(x)
     
     # option 2: GlobalAveragePooling2D + BN + Dense256 + Dropout05 + Dense
-    x = layers.GlobalAveragePooling2D()(base_model.output)
+    x = layers.GlobalAveragePooling2D()(x)
     x = layers.BatchNormalization()(x)  # helps with feature scale
     x = layers.Dense(256, activation='relu', kernel_regularizer=tf.keras.regularizers.l2(Config.L2_REGULARIZATION))(x)
     x = layers.Dropout(Config.DROPOUT_RATE)(x)
@@ -75,7 +86,7 @@ def build_pretrained_model(architecture,
     # output = layers.Dense(1, activation='sigmoid')(x)
     
 
-    model = Model(inputs=base_model.input, outputs=output, name=f'{architecture}_model')
+    model = Model(inputs=inputs, outputs=output, name=f'{architecture}_model')
 
 
 
@@ -120,7 +131,7 @@ def build_simple_cnn(
 
 
 def create_model(
-    config,
+    config: Config,
     model_type: str = "transfer",
     **kwargs
 ) -> tf.keras.Model:
@@ -156,80 +167,3 @@ def create_model(
         raise ValueError(f"Unknown model_type: {model_type}")
     
     return model
-
-
-
-
-
-#check later:
-
-import tensorflow as tf
-import numpy as np
-from skimage import io
-import os
-from typing import Tuple, Dict
-from src.config import Config
-
-# Assume these functions are imported from your module:
-# dental_gray_world_white_balance, mask_background, pad_and_resize
-
-def tf_preprocess_image(record: Tuple(str, Dict, int), config):
-    """
-    Wraps your existing Python preprocessing logic for use in a tf.data pipeline.
-    This function reads, decodes, and applies your processing (white balance, optional masking,
-    and pad/resize) to a given image path.
-    """
-    def _preprocess(record, config):
-        # path is a numpy string
-        path_str = record[0].decode("utf-8")
-        # Load the image
-        if not os.path.exists(path_str):
-            # Return a dummy image if not exists.
-            raise FileNotFoundError(f"Image not found: {path_str}")
-        
-        image = io.imread(path_str)
-        if image is None:
-            raise ValueError(f"Failed to read image: {path_str}")
-        
-        # Optionally normalize/white balance        
-        if config.NORMALIZE_IMAGES:
-            image = dental_gray_world_white_balance(image)
-            
-        # rescale if required
-        if config.rescale_pixels[0] is not None:
-            image = np.clip(image, config.rescale_pixels[0], config.rescale_pixels[1])
-            image = (image - config.rescale_pixels[0]) / (config.rescale_pixels[1] - config.rescale_pixels[0])
-            
-        # mask background
-        if config.MASK_BG:
-            image = mask_background(image, record[1])
-        # Pad and resize image
-        image = pad_and_resize(image, target_dim=config.TARGET_DIM, mask_value=config.MASK_VALUE)
-        return image.astype(np.float32)  # Ensure data type compatibility
-
-    # Wrap the _preprocess function into a tf.py_function.
-    image = tf.py_function(func=_preprocess, inp=[record, config], Tout=tf.float32)
-    # Set static shape so that downstream ops know the dimensions.
-    image.set_shape(config.INPUT_SHAPE)
-    return image
-
-
-def build_tf_dataset(image_paths, labels, batch_size=Config.BATCH_SIZE):
-    """
-    Builds a TensorFlow dataset that applies the preprocessing graph.
-    Args:
-        image_paths: List of image file paths.
-        labels: List of labels.
-    Returns:
-        A tf.data.Dataset instance.
-    """
-    ds = tf.data.Dataset.from_tensor_slices((image_paths, labels))
-    
-    def _load_and_preprocess(path, label):
-        image = tf_preprocess_image(path)
-        return image, label
-
-    ds = ds.map(_load_and_preprocess, num_parallel_calls=tf.data.AUTOTUNE)
-    ds = ds.batch(batch_size)
-    ds = ds.prefetch(tf.data.AUTOTUNE)
-    return ds

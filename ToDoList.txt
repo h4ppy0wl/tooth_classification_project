@@ -2,7 +2,7 @@ done! 1. complete def parse_dataset_json() based on the json structure
 done! 2. edit the down stream functions to make them compatible to records that are Dict and have "augmentation_label"
 done! 3. edit augmentation if statement in the create_tf_dataset()
 done! 4. wrap the preprocess_record() in the tf graph for dataset generation
-5. test dataset generation and view the images inside the dataset and their label
+done! 5. test dataset generation and view the images inside the dataset and their label
 6. create the model for ResNet50 only and check if it does the fitting
 7. add the option of another model and check if it works
 8. generalize the model selection

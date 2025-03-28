@@ -648,14 +648,18 @@ def preprocess_raw_dataset(
             print("Filtering out dark images...")
             
         annotations, removed_images_list = remove_dark_images_from_json(annotations, image_dir,config.DARK_IMAGE_THRESHOLD )
-        print(f"Number of filtered annotations: {len(annotations)}")
+        if verbose:
+            print(f"Number of removed images annotations: {len(removed_images_list)}")
         
         # Get the current datetime and format it so it's safe to use in a filename.
         current_datetime = datetime.datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
         filename = f"removed_dark_images_{current_datetime}.txt"
+        log_path = os.path.join(output_dir,filename)
 
         # Open the file in write mode and write the strings and list items.
-        with open(os.path.join(output_dir,filename), "w", encoding = "utf-8") as file:
+        if verbose:
+            print(f"Saving log of dark image removal at: {os.path.join(output_dir,filename)}")
+        with open(log_path, "w", encoding = "utf-8") as file:
             file.write(f"source: {json_annotations_path}\n")
             file.write(f"darkness threshold: {config.DARK_IMAGE_THRESHOLD}\n")
             file.write(f"removed images count: {len(removed_images_list)}\n")
@@ -668,17 +672,21 @@ def preprocess_raw_dataset(
     if verbose:
         print("Converting annotations to toothwise json file.")
     annotations = convert_annotations(annotations, config.TARGET_CLASS)
-    print(f"Number of annotations: {len(annotations)}")
+    if verbose:
+        print(f"Number of final annotations: {len(annotations)}")
 
     annotations = convert_int32_to_int(annotations)
+    f_annot_path = os.path.join(output_dir,f"filtered_{config.TARGET_CLASS}_annotations.json")
     if verbose: 
-        print("Saving filtered annotations...")
-    with open(os.path.join(output_dir,f"filtered_{config.TARGET_CLASS}_annotations.json"), "w", encoding="utf-8") as f:
+        print(f"Saving filtered annotations to {f_annot_path}")
+    with open(f_annot_path, "w", encoding="utf-8") as f:
         json.dump(annotations, f)
     
     #initiating a progress bar
     if copy_images:
-        progress_bar = tqdm(total=len(annotations), desc="Processing images", unit="image")
+        if verbose:
+            print(f"Copying images to: {output_dir}")
+        progress_bar = tqdm(total=len(annotations), desc="Copying images", unit="image")
         
         # IMAGE PREPROCESSING
         # if verbose: print("Processing images ...")
@@ -788,7 +796,8 @@ def preprocess_dataset_manual(
     
 def split_dataset_json(master_json_path: str,
                         output_dir: str,
-                        config: Config) -> tuple:
+                        config: Config,
+                        verbose: bool = True) -> None:
     """
     Loads the new-master dataset JSON (converted from the raw json) and splits it into train, validation, and test sets stratified by target_class.
     Writes three JSON files to output_dir with the same structure as the master JSON.
@@ -849,14 +858,23 @@ def split_dataset_json(master_json_path: str,
     
     # Ensure output directory exists and save the splits to JSON files.
     os.makedirs(output_dir, exist_ok=True)
-    with open(os.path.join(output_dir, f"{Config.TARGET_CLASS}_filtered_train.json"), 'w', encoding='utf-8') as f:
+    path = os.path.join(output_dir, f"{Config.TARGET_CLASS}_filtered_train.json")
+    with open(path, 'w', encoding='utf-8') as f:
         json.dump(train_json, f, indent=2)
-    with open(os.path.join(output_dir, f"{Config.TARGET_CLASS}_filtered_val.json"), 'w', encoding='utf-8') as f:
+    if verbose:
+        print(f"JSON file save at: {path}")
+        
+    path = os.path.join(output_dir, f"{Config.TARGET_CLASS}_filtered_val.json")
+    with open(path, 'w', encoding='utf-8') as f:
         json.dump(val_json, f, indent=2)
-    with open(os.path.join(output_dir, f"{Config.TARGET_CLASS}_filtered_test.json"), 'w', encoding='utf-8') as f:
+    if verbose:
+        print(f"JSON file save at: {path}")
+        
+    path = os.path.join(output_dir, f"{Config.TARGET_CLASS}_filtered_test.json")
+    with open(path, 'w', encoding='utf-8') as f:
         json.dump(test_json, f, indent=2)
-    
-    return True
+    if verbose:
+        print(f"JSON file save at: {path}")
 
 
 def build_tf_dataset(

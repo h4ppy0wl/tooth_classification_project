@@ -44,17 +44,22 @@ class Config:
                                 The factor can be the majority/minority ratio.
     """
 
+    TARGET_CLASS: str = "Pla"
     IMAGE_DIR: str = "data/raw"
+    RAW_DS_DIR: str = "data/raw/complete_toothwise_annotations.json"
     ANNOTATION_FILE: str = "data/interim"
     OUTPUT_DIR: str = "data/processed"
     DATA_DIR: str = "C:/Users/anedaeij23/Project/tooth_classification_project"
+    TRAIN_JSON_NAME: str = f"{TARGET_CLASS}_filtered_train.json"
+    VAL_JSON_NAME: str = f"{TARGET_CLASS}_filtered_val.json"
+    TEST_JSON_NAME: str = f"{TARGET_CLASS}_filtered_test.json"
     
     TARGET_DIM: int = 256
     INPUT_SHAPE: tuple = (TARGET_DIM, TARGET_DIM, 3)
     MASK_VALUE: int = 0
     ANTIALIZING_IN_RESIZING: bool = False
     
-    TARGET_CLASS: str = "Pla"
+    
     TRAIN_VAL_TEST_RATIOS: tuple[float, float, float] = (0.8, 0.1, 0.1)
     
     BATCH_SIZE: int = 32
@@ -69,9 +74,8 @@ class Config:
     MASK_POLYGON_SMOOTHING: bool = False
     POLYGON_SMOOTHING_TOLERANCE: float = 0.015 
     IMAGE_PVALUE_TYPE: np.dtype = np.float32 
-    RESCALE_PIXELS: tuple = (0, 255)
+    RESCALE_PIXELS: tuple = (0, 255) #define based on model requirement. resnet 
     OVERSAMPLE_FACTOR: int = 3 
-    
     
     
     MODEL_ARCHITECTURE: str = "resnet50"
