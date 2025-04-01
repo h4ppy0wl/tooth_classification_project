@@ -2,7 +2,9 @@ from src import model as model_lib
 from src.config import Config
 import tensorflow as tf
 from tensorflow.keras.optimizers import Adam
-from tensorflow.keras.callbacks import EarlyStopping
+from tensorflow.keras.callbacks import EarlyStopping, ReduceLROnPlateau
+from tensorflow.keras.losses import BinaryFocalCrossentropy
+
 
 def train_attention_model( config: Config,
                             attention_model,
@@ -81,20 +83,37 @@ def train_transfer_model(mymodel, train_dataset, val_dataset, config: Config,
     fine_tune_lr=config.FINE_TUNE_LR
     fine_tune_at=config.FINE_TUNE_FROM_LAYER
     # Define callbacks for the initial training phase:
+    # ReduceLROnPlateau here will monitor validation loss and reduce LR if no improvement
     initial_callbacks = [
-        EarlyStopping(monitor='loss', patience=3, verbose=1, restore_best_weights=True),
-        EarlyStopping(monitor='val_loss', patience=5, verbose=1, restore_best_weights=True)
+        # EarlyStopping(monitor='loss', patience=3, verbose=1, restore_best_weights=True),
+        EarlyStopping(monitor='val_loss', patience=5, verbose=1, restore_best_weights=True),
+        ReduceLROnPlateau(
+            monitor='val_loss',
+            factor=0.5,
+            patience=2,
+            min_lr=1e-7,
+            verbose=1
+        )
     ]
     
     # Phase 1: Initial training with frozen base.
     mymodel.compile(
         optimizer=Adam(learning_rate=initial_lr),
-        loss='binary_crossentropy',
+        loss= BinaryFocalCrossentropy(
+                apply_class_balancing=True,
+                # alpha=0.25,
+                gamma=2.0,
+                from_logits=False,
+                label_smoothing=0.0,
+                reduction="sum_over_batch_size",
+                name="binary_focal_crossentropy"
+                ),
         metrics=[
             tf.keras.metrics.BinaryAccuracy(name='accuracy'),
             tf.keras.metrics.Precision(name='precision'),
             tf.keras.metrics.Recall(name='recall'),
-            tf.keras.metrics.AUC(name='auc')
+            tf.keras.metrics.AUC(name='auc'),
+            tf.keras.metrics.F1Score(name='f1score')
         ]
     )
     
@@ -113,8 +132,15 @@ def train_transfer_model(mymodel, train_dataset, val_dataset, config: Config,
     
     # Define callbacks for the fine-tuning phase:
     fine_tune_callbacks = [
-        EarlyStopping(monitor='loss', patience=3, verbose=1, restore_best_weights=True),
-        EarlyStopping(monitor='val_loss', patience=5, verbose=1, restore_best_weights=True)
+        # EarlyStopping(monitor='loss', patience=3, verbose=1, restore_best_weights=True),
+        EarlyStopping(monitor='val_loss', patience=5, verbose=1, restore_best_weights=True),
+        ReduceLROnPlateau(
+            monitor='val_loss',  # You can also set this to 'loss' if you prefer
+            factor=0.5,          # Factor by which the LR will be reduced
+            patience=2,          # Number of epochs with no improvement after which LR is reduced
+            min_lr=1e-6,         # Lower bound on the learning rate
+            verbose=1
+        )
     ]
     
     # Phase 2: Fine-tuning.
@@ -132,12 +158,21 @@ def train_transfer_model(mymodel, train_dataset, val_dataset, config: Config,
     # Recompile with a lower learning rate.
     mymodel.compile(
         optimizer=Adam(learning_rate=fine_tune_lr),
-        loss='binary_crossentropy',
+        loss=BinaryFocalCrossentropy(
+                apply_class_balancing=True,
+                # alpha=0.25,
+                gamma=2.0,
+                from_logits=False,
+                label_smoothing=0.0,
+                reduction="sum_over_batch_size",
+                name="binary_focal_crossentropy"
+                ),
         metrics=[
             tf.keras.metrics.BinaryAccuracy(name='accuracy'),
             tf.keras.metrics.Precision(name='precision'),
             tf.keras.metrics.Recall(name='recall'),
-            tf.keras.metrics.AUC(name='auc')
+            tf.keras.metrics.AUC(name='auc'),
+            tf.keras.metrics.F1Score(name='f1score')
         ]
     )
 

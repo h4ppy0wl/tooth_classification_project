@@ -9,6 +9,7 @@ import datetime
 import cv2
 import skimage
 from skimage import io, transform, draw, color
+from skimage.filters import gaussian
 import tensorflow as tf
 from tqdm import tqdm
 from sklearn.model_selection import train_test_split
@@ -373,7 +374,7 @@ def mask_background(image: np.ndarray, polygon: list, config: Config) -> np.ndar
         np.ndarray: A new image array where all pixels outside the defined polygon are replaced by the default gray value.
     """
     height, width = image.shape[:2]
-    mask = np.zeros((height, width), dtype=np.uint8)
+    mask = np.zeros((height, width), dtype=bool)
     
     if config.MASK_POLYGON_SMOOTHING:
         polygon = smooth_polygon(polygon, config)
@@ -381,20 +382,38 @@ def mask_background(image: np.ndarray, polygon: list, config: Config) -> np.ndar
     all_points_x = np.array(polygon[0], dtype=np.int32)
     all_points_y = np.array(polygon[1], dtype=np.int32)
     rr, cc = skimage.draw.polygon(all_points_y, all_points_x, shape=mask.shape)
-    mask[rr, cc] = 1
+    mask[rr, cc] = True
 
-    # Make a copy of the original image to apply the mask
-    masked_image = image.copy()
+    
 
     # Define the gray color using a default threshold value of 128
     mask_value = config.MASK_VALUE
-    mask_color = (mask_value, mask_value, mask_value) if image.ndim == 3 else mask_value
+    if mask_value in range(5,50):
+        # Convert image to float [0,1] for skimage
+        float_img = image.astype(np.float32) / 255.0
 
-    # Replace pixels outside the polygon (mask value != 1) with gray
-    if image.ndim == 3:
-        masked_image[mask != 1] = mask_color
+        # Apply Gaussian blur to the entire image
+        # 'multichannel=True' ensures the filter is applied per channel
+        blurred = gaussian(float_img, sigma=mask_value, multichannel=True)
+
+        # Combine: inside polygon = original; outside polygon = blurred
+        # (mask is [H,W], but broadcasting works for color channels)
+        out = blurred.copy()
+        out[mask] = float_img[mask]
+
+        # Convert back to uint8 [0..255]
+        masked_image = (out * 255.0).astype(config.IMAGE_PVALUE_TYPE)
     else:
-        masked_image[mask != 1] = mask_color
+        # Make a copy of the original image to apply the mask
+        masked_image = image.copy()
+        mask_color = (mask_value, mask_value, mask_value) if image.ndim == 3 else mask_value
+
+        # Replace pixels outside the polygon (mask value != 1) with gray
+        masked_image[~mask] = mask_color
+        # if image.ndim == 3:
+        #     masked_image[mask != 1] = mask_color
+        # else:
+        #     masked_image[mask != 1] = mask_color
 
     return masked_image
 
@@ -498,9 +517,9 @@ def pad_and_resize(image: np.ndarray, target_dim: int, mask_value: int) -> np.nd
     
     # Pad image differently based on its dimensionality (grayscale vs. color)
     if image.ndim == 3:
-        padded = np.pad(image, ((pad_top, pad_bottom), (pad_left, pad_right), (0, 0)), mode='constant', constant_values= pad_const)
+        padded = np.pad(image, ((pad_top, pad_bottom), (pad_left, pad_right), (0, 0)), mode='edge')#, constant_values= pad_const)
     elif image.ndim == 2:
-        padded = np.pad(image, ((pad_top, pad_bottom), (pad_left, pad_right)), mode='constant', constant_values= pad_const)
+        padded = np.pad(image, ((pad_top, pad_bottom), (pad_left, pad_right)), mode='edge')#, constant_values= pad_const)
     else:
         raise ValueError("Unsupported image dimensions.")
     

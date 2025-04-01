@@ -56,13 +56,13 @@ class Config:
     
     TARGET_DIM: int = 256
     INPUT_SHAPE: tuple = (TARGET_DIM, TARGET_DIM, 3)
-    MASK_VALUE: int = 0
+    MASK_VALUE: int = 0 #if set to (5-50), the background will be blur and the value will be used for skimage.filter.gaussian sigma value
     ANTIALIZING_IN_RESIZING: bool = False
     
     
     TRAIN_VAL_TEST_RATIOS: tuple[float, float, float] = (0.8, 0.1, 0.1)
     
-    BATCH_SIZE: int = 32
+    BATCH_SIZE: int = 10#32
     RANDOM_SEED: int = 42
     AUGMENT_DATA: bool = True
     SHUFFLE_DATASET: bool = True
@@ -75,16 +75,16 @@ class Config:
     POLYGON_SMOOTHING_TOLERANCE: float = 0.015
     IMAGE_PVALUE_TYPE: np.dtype = np.float32
     RESCALE_PIXELS: tuple = (0, 255) #define based on model requirement. resnet 
-    OVERSAMPLE_FACTOR: int = 3 
+    OVERSAMPLE_FACTOR: int = 2 
     
     
     MODEL_ARCHITECTURE: str = "resnet50"
     L2_REGULARIZATION: float = 0.001
-    DROPOUT_RATE: float = 0.5
+    DROPOUT_RATE: float = 0.3
     INITIAL_LR: float = 1e-1
-    NUM_INITIAL_EPOCHS: int = 2
-    NUM_FINE_TUNE_EPOCHS: int = 2
-    FINE_TUNE_LR: float = 1e-4
+    NUM_INITIAL_EPOCHS: int = 7
+    NUM_FINE_TUNE_EPOCHS: int = 15
+    FINE_TUNE_LR: float = 1e-3
     FINE_TUNE_FROM_LAYER: int = 22
     
 

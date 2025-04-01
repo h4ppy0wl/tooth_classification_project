@@ -3,3 +3,6 @@
 *.png
 *.xlsx
 *.sql
+notebooks/initial_weights.h5
+notebooks/fine_tuned_weights.h5
+New Microsoft Word Document.docx

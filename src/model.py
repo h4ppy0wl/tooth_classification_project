@@ -65,7 +65,7 @@ def build_pretrained_model(architecture,
     # option 2: GlobalAveragePooling2D + BN + Dense256 + Dropout05 + Dense
     gap = layers.GlobalAveragePooling2D()(features)
     bn = layers.BatchNormalization()(gap)  # helps with feature scale
-    dns = layers.Dense(256, activation='relu', kernel_regularizer=tf.keras.regularizers.l2(Config.L2_REGULARIZATION))(bn)
+    dns = layers.Dense(128, activation='relu', kernel_regularizer=tf.keras.regularizers.l2(Config.L2_REGULARIZATION))(bn)
     do = layers.Dropout(Config.DROPOUT_RATE)(dns)
     classification_output = layers.Dense(1, activation='sigmoid', name='classification_output')(do)
     
