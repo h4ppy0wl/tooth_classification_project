@@ -1,9 +1,11 @@
-from src import model as model_lib
-from src.config import Config
+import datetime
 import tensorflow as tf
 from tensorflow.keras.optimizers import Adam
 from tensorflow.keras.callbacks import EarlyStopping, ReduceLROnPlateau
 from tensorflow.keras.losses import BinaryFocalCrossentropy
+from src import model as model_lib
+from src.config import Config
+from src.utils import log_config, log_history
 
 
 def train_attention_model( config: Config,
@@ -54,9 +56,10 @@ def train_attention_model( config: Config,
 
 
 
-def train_transfer_model(mymodel, train_dataset, val_dataset, config: Config,
-                        initial_weights_path="initial_weights.h5",
-                        fine_tuned_weights_path="fine_tuned_weights.h5"):
+def train_transfer_model(mymodel, train_dataset, val_dataset, config: Config, save_models = True,
+                        initial_weights_path="initial_weights",
+                        fine_tuned_weights_path="fine_tuned_weights",
+                        num = 1):
     """
     Train a transfer learning model in two phases: initial training (with a frozen base) then fine-tuning.
     Early stopping is applied based on both training loss and validation loss.
@@ -73,6 +76,7 @@ def train_transfer_model(mymodel, train_dataset, val_dataset, config: Config,
         fine_tune_at (int): If provided, only layers after this index in the base model will be unfrozen.
         initial_weights_path (str): File path to save weights after initial training.
         fine_tuned_weights_path (str): File path to save weights after fine-tuning.
+        num: is used when this function is run in a loop and weights and reports are going to be saved
 
     Returns:
         Tuple: (initial_history, fine_tune_history)
@@ -82,18 +86,27 @@ def train_transfer_model(mymodel, train_dataset, val_dataset, config: Config,
     initial_lr=config.INITIAL_LR
     fine_tune_lr=config.FINE_TUNE_LR
     fine_tune_at=config.FINE_TUNE_FROM_LAYER
+
+    # Create a log directory with a timestamp.
+    log_tail_path = datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
+    log_dir = config.LOG_DIR +"/tensorboard/"+ config.MODEL_ARCHITECTURE +"/"+ log_tail_path
+    log_config(config, log_dir)
+    # Instantiate the TensorBoard callback.
+    tensorboard_callback = tf.keras.callbacks.TensorBoard(
+        log_dir=log_dir,
+        update_freq='epoch',
+        histogram_freq=1,      # Frequency (in epochs) at which to compute activation and weight histograms.
+        write_graph=True,      # Whether to visualize the graph in TensorBoard.
+        write_images=True      # Whether to save model weights as images.
+    )
+    
     # Define callbacks for the initial training phase:
     # ReduceLROnPlateau here will monitor validation loss and reduce LR if no improvement
     initial_callbacks = [
         # EarlyStopping(monitor='loss', patience=3, verbose=1, restore_best_weights=True),
         EarlyStopping(monitor='val_loss', patience=5, verbose=1, restore_best_weights=True),
-        ReduceLROnPlateau(
-            monitor='val_loss',
-            factor=0.5,
-            patience=2,
-            min_lr=1e-7,
-            verbose=1
-        )
+        ReduceLROnPlateau( monitor='val_loss', factor=0.5, patience=2, min_lr=1e-7, verbose=1),
+        tensorboard_callback
     ]
     
     # Phase 1: Initial training with frozen base.
@@ -117,7 +130,7 @@ def train_transfer_model(mymodel, train_dataset, val_dataset, config: Config,
         ]
     )
     
-    print("Starting initial training...")
+    print("**************** Starting initial training **************** ")
     initial_history = mymodel.fit(
         train_dataset,
         validation_data=val_dataset,
@@ -126,25 +139,17 @@ def train_transfer_model(mymodel, train_dataset, val_dataset, config: Config,
         verbose = 1
     )
     
+    log_history(fine_tune_history, log_dir, f"initial_training_history_{num}.json")
     # Save weights after initial training.
-    mymodel.save_weights(initial_weights_path)
-    print(f"Initial model weights saved to: {initial_weights_path}")
+    if save_models:
+        path = f"{initial_weights_path}_{num}_.h5"
+        mymodel.save_weights(path)
+        print(f"Initial model weights saved to: {path}")
     
-    # Define callbacks for the fine-tuning phase:
-    fine_tune_callbacks = [
-        # EarlyStopping(monitor='loss', patience=3, verbose=1, restore_best_weights=True),
-        EarlyStopping(monitor='val_loss', patience=5, verbose=1, restore_best_weights=True),
-        ReduceLROnPlateau(
-            monitor='val_loss',  # You can also set this to 'loss' if you prefer
-            factor=0.5,          # Factor by which the LR will be reduced
-            patience=2,          # Number of epochs with no improvement after which LR is reduced
-            min_lr=1e-6,         # Lower bound on the learning rate
-            verbose=1
-        )
-    ]
+
     
     # Phase 2: Fine-tuning.
-    print("Fine-tuning model...")
+    print("************ Fine-tuning model **************** ")
     # Unfreeze all layers initially.
     mymodel.trainable = True
 
@@ -154,7 +159,22 @@ def train_transfer_model(mymodel, train_dataset, val_dataset, config: Config,
                 layer.trainable = False
             else:
                 layer.trainable = True
+        print(f"Layer {fine_tune_at} and higher set to trainable in fine tuning step.")
 
+    # Define callbacks for the fine-tuning phase:
+    fine_tune_callbacks = [
+        # EarlyStopping(monitor='loss', patience=3, verbose=1, restore_best_weights=True),
+        EarlyStopping(monitor='val_loss', patience=5, verbose=1, restore_best_weights=True),
+        ReduceLROnPlateau(
+            monitor='val_loss',  # You can also set this to 'loss' if you prefer
+            factor=0.5,          # Factor by which the LR will be reduced
+            patience=2,          # Number of epochs with no improvement after which LR is reduced
+            min_lr=1e-7,         # Lower bound on the learning rate
+            verbose=1
+        ),
+        tensorboard_callback
+    ]
+    
     # Recompile with a lower learning rate.
     mymodel.compile(
         optimizer=Adam(learning_rate=fine_tune_lr),
@@ -185,6 +205,11 @@ def train_transfer_model(mymodel, train_dataset, val_dataset, config: Config,
     )
 
     # Save weights after fine-tuning.
-    mymodel.save_weights(fine_tuned_weights_path)
+    if save_models:
+        path = f"{fine_tuned_weights_path}_{num}_.h5"
+        mymodel.save_weights(path)
+        print(f"Fine tuned model weights saved to: {path}")
+    
+    log_history(fine_tune_history, log_dir, f"fine_tune_history_{num}.json")
     
     return initial_history, fine_tune_history

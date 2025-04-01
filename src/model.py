@@ -238,22 +238,21 @@ def create_model(
             trainable_base=True
         )
     """
-    my_config = Config()
     if model_type == "simple":
         model = build_simple_cnn(
-            my_config.INPUT_SHAPE,
+            config.INPUT_SHAPE,
             base_filters=kwargs.get('base_filters', 32))
         
     elif model_type == "transfer":
         model  = build_pretrained_model(
-            architecture= my_config.MODEL_ARCHITECTURE,
-            input_shape= my_config.INPUT_SHAPE,
+            architecture= config.MODEL_ARCHITECTURE,
+            input_shape= config.INPUT_SHAPE,
             trainable_base=kwargs.get('trainable_base', False),
             fine_tune_at=kwargs.get('fine_tune_at', None))
         
     elif model_type == "transfer_attention":
-        model  = build_pretrained_attention_model(architecture= my_config.MODEL_ARCHITECTURE,
-                            input_shape= my_config.INPUT_SHAPE,
+        model  = build_pretrained_attention_model(architecture= config.MODEL_ARCHITECTURE,
+                            input_shape= config.INPUT_SHAPE,
                             trainable_base=kwargs.get('trainable_base', False),
                             fine_tune_at=kwargs.get('fine_tune_at', None))
     else:

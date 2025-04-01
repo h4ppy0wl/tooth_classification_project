@@ -3,10 +3,12 @@
 import os
 import random
 import logging
+import json
 import numpy as np
 import tensorflow as tf
 from datetime import datetime
 from typing import Optional
+from dataclasses import asdict
 
 try:
     import yaml
@@ -91,16 +93,38 @@ def count_trainable_params(model: tf.keras.Model) -> int:
     """
     return np.sum([np.prod(v.shape.as_list()) for v in model.trainable_variables])
 
-def early_stop_callback(
-    monitor: str = "val_loss", 
-    patience: int = 5
-) -> tf.keras.callbacks.EarlyStopping:
+def log_config(config, path):
     """
-    Returns a Keras EarlyStopping callback configured with 
-    the given monitor metric and patience.
+    Logs the configuration parameters to a text file in the same directory as specified by config.LOG_DIR.
     """
-    return tf.keras.callbacks.EarlyStopping(
-        monitor=monitor,
-        patience=patience,
-        restore_best_weights=True
-    )
+    # Ensure the log directory exists.
+    os.makedirs(config.LOG_DIR, exist_ok=True)
+    config_path = os.path.join(config.LOG_DIR, "config.txt")
+    
+    # Convert the dataclass to a dictionary.
+    config_dict = asdict(config)
+    
+    # Write the config to the file in a pretty format.
+    with open(config_path, "w") as f:
+        for key, value in config_dict.items():
+            f.write(f"{key}: {value}\n")
+            
+def log_history(history, log_dir="logs", file_name="history.txt"):
+    """
+    Logs the training history to a text file in JSON format.
+    
+    Parameters:
+        history: A History object returned by model.fit(), which contains a `history` attribute.
+        log_dir (str): The directory where the history file will be saved.
+        file_name (str): The name of the file to save the history.
+    """
+    # Ensure the log directory exists.
+    os.makedirs(log_dir, exist_ok=True)
+    file_path = os.path.join(log_dir, file_name)
+    
+    # Extract the history dictionary.
+    history_dict = history.history
+    
+    # Write the history to a file as JSON.
+    with open(file_path, "w") as f:
+        json.dump(history_dict, f, indent=4)
