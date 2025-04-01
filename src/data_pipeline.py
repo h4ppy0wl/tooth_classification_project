@@ -940,8 +940,8 @@ def build_tf_dataset(
         # Convert the label to an integer class: if it matches config.TARGET_CLASS, output 1; else 0.
         label_int = tf.cond(
             tf.equal(label, tf.constant(config.TARGET_CLASS, dtype=tf.string)),
-            lambda: tf.constant(1, dtype=tf.int32),
-            lambda: tf.constant(0, dtype=tf.int32)
+            lambda: tf.constant(1., dtype=tf.float32),
+            lambda: tf.constant(0., dtype=tf.float32)
         )
         
         return image, label_int
