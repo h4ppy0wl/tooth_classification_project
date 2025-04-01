@@ -16,3 +16,13 @@ done! 6.1 added attention mechanism option
 
 7. add the option of another model and check if it works
 8. generalize the model selection
+
+
+the ratio is ~6.4
+
+
+plan:
+
+two options for data: color-masked non tooth area | blurred
+
+imbalanced data handling: oversampling augmentation + focal loss
