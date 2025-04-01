@@ -66,7 +66,7 @@ class Config:
     BATCH_SIZE: int = 32
     RANDOM_SEED: int = 42
     AUGMENT_DATA: bool = True
-    SHUFFLE_DATASET: bool = True
+    SHUFFLE_DATASET: bool = False
     NORMALIZE_IMAGES: bool = True
     MASK_BG: bool = True
     REMOVE_DARK_IMAGES: bool = True

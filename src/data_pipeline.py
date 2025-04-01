@@ -968,7 +968,7 @@ def build_tf_dataset(
     
     # Map the _load_and_preprocess function in parallel.
     ds = ds.map(_load_and_preprocess, num_parallel_calls= tf.data.AUTOTUNE)
-    
+    ds = ds.cache()
     # Optionally shuffle the dataset.
     if config.SHUFFLE_DATASET:
         ds = ds.shuffle(buffer_size=500, reshuffle_each_iteration=True)#len(records), reshuffle_each_iteration=True)

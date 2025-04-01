@@ -130,7 +130,7 @@ def train_transfer_model(mymodel, train_dataset, val_dataset, config: Config, sa
             tf.keras.metrics.Precision(name='precision'),
             tf.keras.metrics.Recall(name='recall'),
             tf.keras.metrics.AUC(name='auc'),
-            tf.keras.metrics.F1Score(name='f1score')
+            # tf.keras.metrics.F1Score(name='f1score')
         ]
     )
     
@@ -196,7 +196,7 @@ def train_transfer_model(mymodel, train_dataset, val_dataset, config: Config, sa
             tf.keras.metrics.Precision(name='precision'),
             tf.keras.metrics.Recall(name='recall'),
             tf.keras.metrics.AUC(name='auc'),
-            tf.keras.metrics.F1Score(name='f1score')
+            # tf.keras.metrics.F1Score(name='f1score')
         ]
     )
 
