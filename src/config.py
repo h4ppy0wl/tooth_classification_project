@@ -62,7 +62,7 @@ class Config:
     
     TRAIN_VAL_TEST_RATIOS: tuple[float, float, float] = (0.8, 0.1, 0.1)
     
-    BATCH_SIZE: int = 10#32
+    BATCH_SIZE: int = 32
     RANDOM_SEED: int = 42
     AUGMENT_DATA: bool = True
     SHUFFLE_DATASET: bool = True
@@ -75,7 +75,7 @@ class Config:
     POLYGON_SMOOTHING_TOLERANCE: float = 0.015
     IMAGE_PVALUE_TYPE: np.dtype = np.float32
     RESCALE_PIXELS: tuple = (0, 255) #define based on model requirement. resnet 
-    OVERSAMPLE_FACTOR: int = 2 
+    OVERSAMPLE_FACTOR: int = 3 
     
     
     MODEL_ARCHITECTURE: str = "resnet50"
