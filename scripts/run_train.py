@@ -1,6 +1,8 @@
 import os
+import sys
 import tensorflow as tf
-
+parent_dir = os.path.abspath(os.path.join(os.getcwd(), os.pardir))
+sys.path.append(parent_dir)
 from src.config import Config
 from src.data_pipeline import parse_dataset_json, build_tf_dataset
 from src.model import create_model        

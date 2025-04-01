@@ -57,7 +57,7 @@ class Config:
     
     TARGET_DIM: int = 256
     INPUT_SHAPE: tuple = (TARGET_DIM, TARGET_DIM, 3)
-    MASK_VALUE: int = 0 #if set to (5-50), the background will be blur and the value will be used for skimage.filter.gaussian sigma value
+    MASK_VALUE: int = 25 #if set to (5-50), the background will be blur and the value will be used for skimage.filter.gaussian sigma value
     ANTIALIZING_IN_RESIZING: bool = False
     
     

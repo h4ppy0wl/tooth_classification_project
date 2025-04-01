@@ -1,6 +1,7 @@
 # data_pipeline.py
 
 import os
+import sys
 import random
 import json
 from typing import List, Tuple, Dict
@@ -13,7 +14,8 @@ from skimage.filters import gaussian
 import tensorflow as tf
 from tqdm import tqdm
 from sklearn.model_selection import train_test_split
-
+parent_dir = os.path.abspath(os.path.join(os.getcwd(), os.pardir))
+sys.path.append(parent_dir)
 from src.config import Config
 
 # import pandas as pd

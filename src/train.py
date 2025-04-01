@@ -1,8 +1,12 @@
+import os
+import sys
 import datetime
 import tensorflow as tf
 from tensorflow.keras.optimizers import Adam
 from tensorflow.keras.callbacks import EarlyStopping, ReduceLROnPlateau
 from tensorflow.keras.losses import BinaryFocalCrossentropy
+parent_dir = os.path.abspath(os.path.join(os.getcwd(), os.pardir))
+sys.path.append(parent_dir)
 from src import model as model_lib
 from src.config import Config
 from src.utils import log_config, log_history
