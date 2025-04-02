@@ -8,7 +8,9 @@ from tensorflow.keras.applications.resnet import preprocess_input as resnet_prep
 from tensorflow.keras.applications.inception_v3 import preprocess_input as inception_preprocess
 from tensorflow.keras.applications.efficientnet import preprocess_input as effnet_preprocess
 parent_dir = os.path.abspath(os.path.join(os.getcwd(), os.pardir))
+current_dir = os.path.abspath(os.getcwd())
 sys.path.append(parent_dir)
+sys.path.append(current_dir)
 from src.config import Config
 
 

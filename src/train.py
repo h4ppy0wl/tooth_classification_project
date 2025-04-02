@@ -6,7 +6,9 @@ from tensorflow.keras.optimizers import Adam
 from tensorflow.keras.callbacks import EarlyStopping, ReduceLROnPlateau
 from tensorflow.keras.losses import BinaryFocalCrossentropy
 parent_dir = os.path.abspath(os.path.join(os.getcwd(), os.pardir))
+current_dir = os.path.abspath(os.getcwd())
 sys.path.append(parent_dir)
+sys.path.append(current_dir)
 from src import model as model_lib
 from src.config import Config
 from src.utils import log_config, log_history
@@ -143,7 +145,7 @@ def train_transfer_model(mymodel, train_dataset, val_dataset, config: Config, sa
         verbose = 1
     )
     
-    log_history(fine_tune_history, log_dir, f"initial_training_history_{num}.json")
+    log_history(initial_history, log_dir, f"initial_training_history_{num}.json")
     # Save weights after initial training.
     if save_models:
         path = f"{initial_weights_path}_{num}_.h5"

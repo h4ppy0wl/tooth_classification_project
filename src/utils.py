@@ -108,7 +108,15 @@ def log_config(config, path):
     with open(config_path, "w") as f:
         for key, value in config_dict.items():
             f.write(f"{key}: {value}\n")
-            
+
+def convert_to_serializable(o):
+    # Convert numpy float32/float64 to Python float
+    if isinstance(o, (np.float32, np.float64)):
+        return float(o)
+    # Optionally handle numpy arrays, etc.
+    raise TypeError(f"Object of type {o.__class__.__name__} is not JSON serializable")
+
+
 def log_history(history, log_dir="logs", file_name="history.txt"):
     """
     Logs the training history to a text file in JSON format.
@@ -127,4 +135,4 @@ def log_history(history, log_dir="logs", file_name="history.txt"):
     
     # Write the history to a file as JSON.
     with open(file_path, "w") as f:
-        json.dump(history_dict, f, indent=4)
+        json.dump(history_dict, f, indent=4, default=convert_to_serializable)

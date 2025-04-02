@@ -10,12 +10,15 @@ import datetime
 import cv2
 import skimage
 from skimage import io, transform, draw, color
+from skimage.io import imsave
 from skimage.filters import gaussian
 import tensorflow as tf
 from tqdm import tqdm
 from sklearn.model_selection import train_test_split
 parent_dir = os.path.abspath(os.path.join(os.getcwd(), os.pardir))
+current_dir = os.path.abspath(os.getcwd())
 sys.path.append(parent_dir)
+sys.path.append(current_dir)
 from src.config import Config
 
 # import pandas as pd
@@ -1745,8 +1748,8 @@ def tf_build_tf_dataset(records: list, config: Config) -> tf.data.Dataset:
     
     # Map the _load_and_preprocess function in parallel.
     ds = ds.map(_load_and_preprocess, num_parallel_calls=tf.data.AUTOTUNE)
-    ds = ds.cache()
-    
+    # ds = ds.cache()
+    ds = ds.apply(tf.data.experimental.copy_to_device("/GPU:0"))
     # Optionally shuffle the dataset.
     if config.SHUFFLE_DATASET:
         ds = ds.shuffle(buffer_size=500, reshuffle_each_iteration=True)
@@ -1756,6 +1759,237 @@ def tf_build_tf_dataset(records: list, config: Config) -> tf.data.Dataset:
     ds = ds.prefetch(buffer_size=tf.data.AUTOTUNE)
     
     return ds
+
+# --- Revised Dataset Builder ---
+def tf_build_tf_dataset_optimized(
+    all_records: list, # Takes the direct output of parse_dataset_json
+    config: Config
+) -> tf.data.Dataset:
+    """
+    Builds an optimized tf.data.Dataset using from_tensor_slices,
+    handling ragged tensors for polygon data.
+
+    Args:
+        all_records: List of records, output from parse_dataset_json.
+        config: Configuration object.
+
+    Returns:
+        An optimized tf.data.Dataset.
+    """
+    # 1. Prepare data for from_tensor_slices
+    full_image_paths = [r[0] for r in all_records]
+    polygon_xs = [r[1] for r in all_records] # List of lists (ragged)
+    polygon_ys = [r[2] for r in all_records] # List of lists (ragged)
+    string_labels = [r[3] for r in all_records]
+    augment_flags = [r[4] for r in all_records]
+
+    # Create TensorFlow constants, using RaggedTensor for polygons
+    paths_tensor = tf.constant(full_image_paths)
+    # Use from_generator if creating ragged constant directly is problematic
+    # or tf.ragged.constant if lists are compatible
+    poly_x_tensor = tf.ragged.constant(polygon_xs, dtype=tf.float32) # Assuming coords are floats
+    poly_y_tensor = tf.ragged.constant(polygon_ys, dtype=tf.float32) # Assuming coords are floats
+    labels_tensor = tf.constant(string_labels)
+    flags_tensor = tf.constant(augment_flags)
+
+
+    # 2. Create the initial dataset from slices
+    dataset = tf.data.Dataset.from_tensor_slices(
+        (paths_tensor, poly_x_tensor, poly_y_tensor, labels_tensor, flags_tensor)
+    )
+
+    # 3. Define preprocessing and augmentation function to map
+    # Create rotation layer outside the map function.
+    random_rotation_layer = tf.keras.layers.RandomRotation(
+        factor=(-0.1, 0.1), fill_mode="nearest"
+    )
+
+    def _load_preprocess_augment(path, poly_x, poly_y, label, aug_flag):
+        # Create the record1 input as expected by tf_preprocess_record
+        record1 = (path, poly_x, poly_y, label, aug_flag)
+        processed_image, processed_label, processed_flag = tf_preprocess_record(record1, config)
+
+        # Set static shape for the processed image
+        processed_image.set_shape([config.INPUT_SHAPE[0], config.INPUT_SHAPE[1], config.INPUT_SHAPE[2]])
+
+        # Define augmentation function (applied to the processed image).
+        def augment_fn(img):
+            img = tf.image.random_flip_left_right(img)
+            img = random_rotation_layer(img)
+            return img
+
+        # Apply augmentation conditionally using the original flag from the dataset slice.
+        final_image = tf.cond(aug_flag, lambda: augment_fn(processed_image), lambda: processed_image)
+
+        # Convert label: if it matches TARGET_CLASS, output 1; else 0.
+        final_label = tf.cond(
+            tf.equal(label, tf.constant(config.TARGET_CLASS, dtype=tf.string)),
+            lambda: tf.constant(1., dtype=tf.float32),
+            lambda: tf.constant(0., dtype=tf.float32)
+        )
+        final_label.set_shape([]) # Set shape for the final scalar label
+
+        return final_image, final_label # Return only the final image and label needed for training
+
+    # 4. Map the function
+    ds = dataset.map(_load_preprocess_augment, num_parallel_calls=tf.data.AUTOTUNE)
+
+    # 5. Apply optimizations (Caching, Shuffling, Batching, Prefetching)
+
+    # Cache after mapping if dataset fits in memory
+    # ds = ds.cache() # Uncomment if needed and feasible
+
+    # Shuffle after caching (if used)
+    if config.SHUFFLE_DATASET:
+        # Adjust buffer size based on memory, len(all_records) is a good default
+        ds = ds.shuffle(buffer_size=len(all_records), reshuffle_each_iteration=True)
+
+    # Batch the dataset
+    ds = ds.batch(config.BATCH_SIZE)
+
+    # Prefetch to overlap CPU preprocessing and GPU training
+    ds = ds.prefetch(buffer_size=tf.data.AUTOTUNE)
+
+    # Remove explicit copy_to_device unless profiling shows it's beneficial
+    # ds = ds.apply(tf.data.experimental.copy_to_device("/GPU:0"))
+
+    return ds
+
+def preprocess_and_save_images(all_records: list, config: Config, set_name: str) -> list:
+    """
+    Preprocess each record and save the resulting image to disk only once.
+    Records that are augmentation copies (aug_flag==True) point to the same saved file.
+    The output folder is built using a code derived from several config variables:
+        TARGET_CLASS, MASK_VALUE, RANDOM_SEED, AUGMENT_DATA, NORMALIZE_IMAGES,
+        MASK_BG, DARK_IMAGE_THRESHOLD, POLYGON_SMOOTHING_TOLERANCE.
+    
+    If the folder (and records file) already exists, the function loads the saved records list.
+    
+    Each record is expected to be a list:
+        [original_image_name, polygon_x, polygon_y, label, augmentation_flag]
+    """
+    # Build a folder code using the configuration parameters.
+    folder_code = (
+        f"{config.TARGET_CLASS}_"
+        f"{config.MASK_VALUE}_"
+        f"{config.RANDOM_SEED}_"
+        f"{int(config.AUGMENT_DATA)}_"  # Convert bool to 0 or 1.
+        f"{int(config.NORMALIZE_IMAGES)}_"
+        f"{int(config.MASK_BG)}_"
+        f"{config.DARK_IMAGE_THRESHOLD}_"
+        f"{config.POLYGON_SMOOTHING_TOLERANCE}"
+    )
+    
+    processed_folder = os.path.join(config.DATA_DIR, config.PROCESSED_DIR, folder_code)
+    records_file = os.path.join(processed_folder, f"{set_name}_records.json")
+    
+    # If the folder and records file already exist, load and return the records.
+    if os.path.exists(processed_folder) and os.path.exists(records_file):
+        print(f"Processed folder '{processed_folder}' and records file exist. Loading records...")
+        with open(records_file, "r") as f:
+            updated_records = json.load(f)
+        return updated_records
+    
+    # If the folder exists but records file doesn't, or if the folder doesn't exist, process the images.
+    os.makedirs(processed_folder, exist_ok=True)
+    processed_images = {}  # Track images already processed by base name.
+    updated_records = []
+
+    for record in all_records:
+        original_path, poly_x, poly_y, label, aug_flag = record
+        base_name = os.path.basename(original_path)
+        
+        # For augmentation copies, use the same preprocessed file as the original.
+        if base_name in processed_images:
+            new_path = processed_images[base_name]
+        else:
+            # Process the image using your existing preprocess_record function.
+            processed_image, processed_label, processed_aug_flag = preprocess_record(record, config)
+            new_path = os.path.join(processed_folder, base_name)
+            # Convert image to uint8 if necessary.
+            if processed_image.dtype != np.uint8:
+                img_to_save = (processed_image * 255).astype(np.uint8)
+            else:
+                img_to_save = processed_image
+            imsave(new_path, img_to_save)
+            processed_images[base_name] = new_path
+
+        # Update the record to point to the new preprocessed image path.
+        updated_record = [new_path, poly_x, poly_y, label, aug_flag]
+        updated_records.append(updated_record)
+
+    # Save the updated records list for future runs.
+    with open(records_file, "w") as f:
+        json.dump(updated_records, f)
+    print(f"Preprocessing complete. Records saved to {records_file}")
+    
+    return updated_records
+
+def build_tf_dataset_from_preprocessed(records: list, config) -> tf.data.Dataset:
+    """
+    Builds a tf.data.Dataset from preprocessed images saved on disk.
+    Each record is assumed to be in the format:
+        [image_path, polygon_x, polygon_y, label, augmentation_flag]
+    
+    Images are loaded from disk and, if the augmentation flag is True,
+    the image is augmented on the fly.
+    """
+    # Unpack fields from records.
+    image_paths = [r[0] for r in records]
+    polygon_xs = [r[1] for r in records]  # if needed later
+    polygon_ys = [r[2] for r in records]  # if needed later
+    labels = [r[3] for r in records]
+    aug_flags = [r[4] for r in records]
+
+    # Create TensorFlow tensors.
+    paths_tensor = tf.constant(image_paths)
+    poly_x_tensor = tf.ragged.constant(polygon_xs, dtype=tf.float32)
+    poly_y_tensor = tf.ragged.constant(polygon_ys, dtype=tf.float32)
+    labels_tensor = tf.constant(labels)
+    flags_tensor = tf.constant(aug_flags)
+
+    # Create the dataset.
+    dataset = tf.data.Dataset.from_tensor_slices(
+        (paths_tensor, poly_x_tensor, poly_y_tensor, labels_tensor, flags_tensor)
+    )
+
+    # Create an augmentation layer, for example, a random rotation layer.
+    random_rotation_layer = tf.keras.layers.RandomRotation(
+        factor=(-0.1, 0.1), fill_mode="nearest"
+    )
+
+    def _load_image(path, poly_x, poly_y, label, aug_flag):
+        # Load the preprocessed image from disk.
+        image = tf.io.read_file(path)
+        image = tf.image.decode_image(image, channels=3, expand_animations=False)
+        # Resize image to the desired input dimensions if needed.
+        image = tf.image.resize(image, [config.INPUT_SHAPE[0], config.INPUT_SHAPE[1]])
+        
+        # Apply augmentation conditionally.
+        def augment_fn(img):
+            img = tf.image.random_flip_left_right(img)
+            img = random_rotation_layer(img)
+            return img
+
+        final_image = tf.cond(aug_flag, lambda: augment_fn(image), lambda: image)
+        
+        # Convert label: if it matches TARGET_CLASS, output 1; else 0.
+        final_label = tf.cond(
+            tf.equal(label, tf.constant(config.TARGET_CLASS, dtype=tf.string)),
+            lambda: tf.constant(1.0, dtype=tf.float32),
+            lambda: tf.constant(0.0, dtype=tf.float32)
+        )
+        final_label.set_shape([])
+        return final_image, final_label
+
+    dataset = dataset.map(_load_image, num_parallel_calls=tf.data.AUTOTUNE)
+
+    if config.SHUFFLE_DATASET:
+        dataset = dataset.shuffle(buffer_size=len(records), reshuffle_each_iteration=True)
+    dataset = dataset.batch(config.BATCH_SIZE)
+    dataset = dataset.prefetch(tf.data.AUTOTUNE)
+    
+    return dataset
 
 if __name__ == "__main__":
     """

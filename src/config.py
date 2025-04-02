@@ -49,8 +49,9 @@ class Config:
     IMAGE_DIR: str = "data/raw"
     RAW_DS_DIR: str = "data/raw/complete_toothwise_annotations.json"
     ANNOTATION_FILE: str = "data/processed"#"data/interim"
+    PROCESSED_DIR: str = "data/processed"
     OUTPUT_DIR: str = "data/processed"
-    DATA_DIR: str = "C:/Users/anedaeij23/Project/tooth_classification_project"
+    DATA_DIR: str = "/home/arash/tooth_classification_project"#"C:/Users/anedaeij23/Project/tooth_classification_project"
     LOG_DIR: str = "logs"
     TRAIN_JSON_NAME: str = f"{TARGET_CLASS}_filtered_train.json"
     VAL_JSON_NAME: str = f"{TARGET_CLASS}_filtered_val.json"
@@ -58,7 +59,7 @@ class Config:
     
     TARGET_DIM: int = 256
     INPUT_SHAPE: tuple = (TARGET_DIM, TARGET_DIM, 3)
-    MASK_VALUE: int = 8 #if set to (5-49), the background will be blur and the value will be used for skimage.filter.gaussian sigma value
+    MASK_VALUE: int = 128 #if set to (5-49), the background will be blur and the value will be used for skimage.filter.gaussian sigma value
     ANTIALIZING_IN_RESIZING: bool = False
     
     
@@ -75,9 +76,9 @@ class Config:
     DARK_IMAGE_THRESHOLD: float = 0.25
     MASK_POLYGON_SMOOTHING: bool = False
     POLYGON_SMOOTHING_TOLERANCE: float = 0.015
-    IMAGE_PVALUE_TYPE: np.dtype = tf.float32 #np.float32
+    IMAGE_PVALUE_TYPE: np.dtype = np.float32 #np.float32
     RESCALE_PIXELS: tuple = (0, 255) #define based on model requirement. resnet 
-    OVERSAMPLE_FACTOR: int = 3 
+    OVERSAMPLE_FACTOR: int = 4 
     
     
     MODEL_ARCHITECTURE: str = "resnet50"
