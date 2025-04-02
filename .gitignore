@@ -1,4 +1,5 @@
 /data
+/logs
 /models/experiments
 *.png
 *.xlsx
@@ -6,3 +7,6 @@
 notebooks/initial_weights.h5
 notebooks/fine_tuned_weights.h5
 New Microsoft Word Document.docx
+/*/__pycache__
+*/__pycache__
+src/__pycache__

@@ -223,6 +223,76 @@ def dental_gray_world_white_balance(image_rgb):
 
     return img_float#skimage.img_as_ubyte(img_float)  # Convert back to uint8
 
+@tf.function
+def tf_dental_gray_world_white_balance(image_rgb):
+    """
+    A preprocessing function to apply modified gray-world white balance for dental images.
+    Preserves red (gums/tongue) while balancing white (teeth).
+
+    Args:
+        image_rgb: A TensorFlow tensor representing the RGB image. Expected dtype is either tf.uint8 or tf.float32.
+                   If tf.uint8, the image is normalized to [0,1].
+
+    Returns:
+        A TensorFlow tensor with white-balanced image values in the range [0,1].
+    """
+    # Convert to float for processing if needed.
+    # (tf.uint8 images will be cast and normalized; otherwise, assume already in float format.)
+    if image_rgb.dtype == tf.uint8:
+        img_float = tf.cast(image_rgb, tf.float32) / 255.0
+    else:
+        img_float = tf.identity(image_rgb)
+    
+    # Convert to HSV. TensorFlow's rgb_to_hsv expects the input image in [0,1].
+    img_hsv = tf.image.rgb_to_hsv(img_float)
+    
+    # Create a "blue mask" (glove mask) in the HSV space.
+    # blue_mask = ((H > 0.43) & (H < 0.70)) & ((S > 0.30) & (S < 0.55))
+    mask_hue_blue = tf.logical_and(tf.greater(img_hsv[..., 0], 0.43),
+                                   tf.less(img_hsv[..., 0], 0.70))
+    mask_sat_blue = tf.logical_and(tf.greater(img_hsv[..., 1], 0.30),
+                                   tf.less(img_hsv[..., 1], 0.55))
+    blue_mask = tf.logical_and(mask_hue_blue, mask_sat_blue)
+    
+    # Create a "black mask" for dark regions in the image.
+    # black_mask = ((H > 0.95) or (H < 0.05)) & (S > 0.55)
+    mask_hue_black = tf.logical_or(tf.greater(img_hsv[..., 0], 0.95),
+                                   tf.less(img_hsv[..., 0], 0.05))
+    mask_sat_black = tf.greater(img_hsv[..., 1], 0.55)
+    black_mask = tf.logical_and(mask_hue_black, mask_sat_black)
+    # Explicitly set the shape for the mask.
+    black_mask.set_shape([None, None])
+    
+    # Compute the mean of the V channel over non-black pixels.
+    non_black_v = tf.boolean_mask(img_hsv[..., 2], tf.logical_not(black_mask))
+    avg_v = tf.reduce_mean(non_black_v)
+    
+    # For RGB channel averages, exclude pixels in either blue_mask or black_mask.
+    combined_mask = tf.logical_not(tf.logical_or(blue_mask, black_mask))
+    combined_mask.set_shape([None, None])
+    avg_r = tf.reduce_mean(tf.boolean_mask(img_float[..., 0], combined_mask))
+    avg_g = tf.reduce_mean(tf.boolean_mask(img_float[..., 1], combined_mask))
+    avg_b = tf.reduce_mean(tf.boolean_mask(img_float[..., 2], combined_mask))
+    
+    # Compute global gray mean.
+    avg_gray = (avg_r + avg_g + avg_b) / 3.0
+    
+    factor_scaler = 2.0
+    factor = 0.8 + factor_scaler * tf.square(avg_v - 1.0)
+    
+    # Apply channel-wise correction.
+    red_corrected = img_float[..., 0] * ((factor + 0.2) * (avg_gray / avg_r))
+    green_corrected = img_float[..., 1] * (factor * (avg_gray / avg_g))
+    blue_corrected = img_float[..., 2] * (factor * (avg_gray / avg_b))
+    
+    # Reconstruct the image.
+    img_corrected = tf.stack([red_corrected, green_corrected, blue_corrected], axis=-1)
+    
+    # Clip values to the range [0,1].
+    img_corrected = tf.clip_by_value(img_corrected, 0.0, 1.0)
+    
+    return img_corrected
+
 def is_darker_than_threshold(image_path: str, threshold: float):
     """
     Determines if the mean intensity of an image is darker than a given threshold.
@@ -394,7 +464,7 @@ def mask_background(image: np.ndarray, polygon: list, config: Config) -> np.ndar
         # Convert image to float [0,1] for skimage
         float_img = image.astype(np.float32) / 255.0
 
-        # Apply Gaussian blur to the entire image
+        # Apply keras.filters.gaussian blur to the entire image
         # 'multichannel=True' ensures the filter is applied per channel
         blurred = gaussian(float_img, sigma=mask_value, multichannel=True)
 
@@ -418,6 +488,355 @@ def mask_background(image: np.ndarray, polygon: list, config: Config) -> np.ndar
         #     masked_image[mask != 1] = mask_color
 
     return masked_image
+
+# def tf_gaussian_kernel(size, sigma):
+#     """
+#     Creates a 1D Gaussian kernel.
+#     """
+#     x = tf.range(-size // 2 + 1, size // 2 + 1, dtype=tf.float32)
+#     kernel = tf.exp(-0.5 * tf.square(x / sigma))
+#     kernel /= tf.reduce_sum(kernel)
+#     return kernel
+
+# # Global variable to hold the cached kernel.
+# CACHED_GAUSSIAN_KERNEL = None
+
+# def init_cached_gaussian_kernel(config):
+#     """Initializes the global cached Gaussian kernel if needed."""
+#     global CACHED_GAUSSIAN_KERNEL
+#     sigma = tf.cast(config.MASK_VALUE, tf.float32)
+#     # Kernel size: 2*ceil(3*sigma)+1
+#     kernel_size = tf.cast(2 * tf.math.ceil(3 * sigma) + 1, tf.int32)
+#     kernel_1d = tf_gaussian_kernel(kernel_size, sigma)  # This function must return a 1D kernel.
+#     kernel_2d = tf.tensordot(kernel_1d, kernel_1d, axes=0)
+#     # Expand dimensions so that shape is (kernel_size, kernel_size, 1, 1)
+#     CACHED_GAUSSIAN_KERNEL = kernel_2d[:, :, tf.newaxis, tf.newaxis]
+
+
+
+# @tf.function
+# def tf_mask_background(image, polygon, config):
+#     """
+#     Masks the background of an image outside a specified polygon.
+    
+#     For color images, pixels outside the polygon are replaced by a gray value
+#     (mask_value, mask_value, mask_value). For grayscale images, the replacement is mask_value.
+#     When config.MASK_VALUE is between 5 and 50, a Gaussian blur is applied to the outside region.
+    
+#     Args:
+#         image: A TensorFlow tensor representing the image (H x W x C or H x W).
+#         polygon: A tuple or list of two elements, where polygon[0] and polygon[1] are lists of
+#                  x and y coordinates of the polygon vertices.
+#         config: A configuration object with attributes:
+#             - MASK_POLYGON_SMOOTHING (bool)
+#             - MASK_VALUE (int)
+#             - IMAGE_PVALUE_TYPE (tf.DType) e.g. tf.uint8
+        
+#     Returns:
+#         A tensor with the same shape as image with background masked.
+#     """
+#     # Get image height and width.
+#     shape = tf.shape(image)
+#     height = shape[0]
+#     width = shape[1]
+
+#     # Optionally smooth the polygon.
+#     if config.MASK_POLYGON_SMOOTHING:
+#         polygon = smooth_polygon(polygon, config)  # Assumed to be TF-compatible.
+
+#     # Convert polygon coordinate lists to tensors of type float32.
+#     poly_x = tf.cast(polygon[0], tf.float32)  # shape (n_points,)
+#     poly_y = tf.cast(polygon[1], tf.float32)  # shape (n_points,)
+
+#     # Create a meshgrid of pixel coordinates.
+#     x_range = tf.cast(tf.range(width), tf.float32)
+#     y_range = tf.cast(tf.range(height), tf.float32)
+#     grid_x, grid_y = tf.meshgrid(x_range, y_range)  # both shape (height, width)
+
+#     # Expand dims so that grid coordinates can be compared to each polygon vertex.
+#     grid_x_exp = tf.expand_dims(grid_x, axis=-1)  # (H, W, 1)
+#     grid_y_exp = tf.expand_dims(grid_y, axis=-1)  # (H, W, 1)
+
+#     # Reshape polygon coordinates for broadcasting.
+#     poly_x_exp = tf.reshape(poly_x, [1, 1, -1])  # (1, 1, n_points)
+#     poly_y_exp = tf.reshape(poly_y, [1, 1, -1])  # (1, 1, n_points)
+
+#     # Also get the "next" vertex for each edge (using tf.roll).
+#     poly_x_next = tf.roll(poly_x, shift=-1, axis=0)
+#     poly_y_next = tf.roll(poly_y, shift=-1, axis=0)
+#     poly_x_next_exp = tf.reshape(tf.cast(poly_x_next, tf.float32), [1, 1, -1])
+#     poly_y_next_exp = tf.reshape(tf.cast(poly_y_next, tf.float32), [1, 1, -1])
+
+#     # Compute conditions for the ray-casting algorithm.
+#     # Condition 1: The y-coordinate of the point is between the y's of the edge endpoints.
+#     cond1 = tf.math.not_equal(poly_y_exp > grid_y_exp, poly_y_next_exp > grid_y_exp)
+#     # Compute the x-coordinate at which the horizontal line at grid_y intersects the edge.
+#     epsilon = 1e-6
+#     slope = (poly_x_next_exp - poly_x_exp) / (poly_y_next_exp - poly_y_exp + epsilon)
+#     intersect_x = slope * (grid_y_exp - poly_y_exp) + poly_x_exp
+#     cond2 = grid_x_exp < intersect_x
+
+#     # An edge is crossed if both conditions hold.
+#     crossings = tf.logical_and(cond1, cond2)
+#     # Count the number of crossings per pixel.
+#     crossing_count = tf.reduce_sum(tf.cast(crossings, tf.int32), axis=-1)
+#     # Inside polygon if count is odd.
+#     mask = tf.math.mod(crossing_count, 2) == 1  # shape (height, width)
+
+#     # Get the mask value from the configuration.
+#     mask_value = config.MASK_VALUE  # assumed to be a python integer
+
+#     # Case 1: When mask_value is in the range 5 to 50, apply Gaussian blur to the outside region.
+#     if mask_value in range(5, 50):
+#         # # Ensure the image is in float [0,1].
+#         # if image.dtype == tf.uint8:
+#         #     image_float = tf.cast(image, tf.float32) / 255.0
+#         # else:
+#         #     image_float = tf.identity(image)
+
+#         # sigma = tf.cast(mask_value, tf.float32)
+#         # # Determine kernel size: 2*ceil(3*sigma)+1
+#         # kernel_size = tf.cast(2 * tf.math.ceil(3 * sigma) + 1, tf.int32)
+#         # kernel_1d = tf_gaussian_kernel(kernel_size, sigma)  # (kernel_size,)
+#         # # Create 2D separable kernel.
+#         # kernel_2d = tf.tensordot(kernel_1d, kernel_1d, axes=0)  # (kernel_size, kernel_size)
+#         # kernel_2d = kernel_2d[:, :, tf.newaxis, tf.newaxis]  # (k, k, 1, 1)
+
+#         # # Apply convolution based on image rank.
+#         # if tf.rank(image_float) == 3 and tf.shape(image_float)[-1] == 3:
+#         #     # For color images, apply the same kernel to each channel using depthwise convolution.
+#         #     channels = 3
+#         #     kernel_2d = tf.tile(kernel_2d, [1, 1, channels, 1])
+#         #     image_exp = tf.expand_dims(image_float, axis=0)  # add batch dim
+#         #     blurred = tf.nn.depthwise_conv2d(image_exp, kernel_2d, strides=[1, 1, 1, 1], padding='SAME')
+#         #     blurred = tf.squeeze(blurred, axis=0)
+#         # else:
+#         #     # For grayscale images.
+#         #     image_exp = tf.expand_dims(tf.expand_dims(image_float, axis=0), axis=-1)  # shape (1,H,W,1)
+#         #     blurred = tf.nn.conv2d(image_exp, kernel_2d, strides=[1, 1, 1, 1], padding='SAME')
+#         #     blurred = tf.squeeze(blurred, axis=[0, -1])
+        
+#         # Ensure the image is in float [0,1]
+#         if image.dtype == tf.uint8:
+#             image_float = tf.cast(image, tf.float32) / 255.0
+#         else:
+#             image_float = tf.identity(image)
+
+#         sigma = tf.cast(mask_value, tf.float32)
+#         # # Determine kernel size: 2*ceil(3*sigma)+1
+#         # kernel_size = tf.cast(2 * tf.math.ceil(3 * sigma) + 1, tf.int32)
+#         # kernel_1d = tf_gaussian_kernel(kernel_size, sigma)  # shape (kernel_size,)
+#         # Create a 2D separable kernel.
+#         kernel_2d = tf.tensordot(kernel_1d, kernel_1d, axes=0)  # shape (kernel_size, kernel_size)
+#         kernel_2d = kernel_2d[:, :, tf.newaxis, tf.newaxis]  # shape (k, k, 1, 1)
+#         pad_amt = kernel_size // 2
+
+#         # Use the cached kernel instead of computing it here.
+#         global CACHED_GAUSSIAN_KERNEL
+#         kernel_2d = CACHED_GAUSSIAN_KERNEL  # shape: (kernel_size, kernel_size, 1, 1)
+#         pad_amt = tf.cast(tf.shape(kernel_2d)[0] // 2, tf.int32)
+
+
+        
+#         # # Instead of computing a large Gaussian kernel, we approximate the blur.
+#         # # Expand dims to add a batch dimension.
+#         # image_exp = tf.expand_dims(image_float, axis=0)
+#         # blurred = approximate_gaussian_blur(image_exp, num_passes=3)
+#         # blurred = tf.squeeze(blurred, axis=0)
+
+#         # For color images:
+#         if tf.rank(image_float) == 3 and tf.shape(image_float)[-1] == 3:
+#             channels = 3
+#             # Expand dims to add a batch dimension.
+#             image_exp = tf.expand_dims(image_float, axis=0)
+#             # Pad using reflection to avoid zero-edge artifacts.
+#             image_padded = tf.pad(
+#                 image_exp,
+#                 paddings=[[0, 0], [pad_amt, pad_amt], [pad_amt, pad_amt], [0, 0]],
+#                 mode="REFLECT"
+#             )
+#             # Apply depthwise convolution with VALID padding.
+#             blurred = tf.nn.depthwise_conv2d(image_padded, 
+#                                             tf.tile(kernel_2d, [1, 1, channels, 1]), 
+#                                             strides=[1, 1, 1, 1], 
+#                                             padding='VALID')
+#             blurred = tf.squeeze(blurred, axis=0)
+#         else:
+#             # For grayscale images:
+#             image_exp = tf.expand_dims(tf.expand_dims(image_float, axis=0), axis=-1)
+#             image_padded = tf.pad(
+#                 image_exp,
+#                 paddings=[[0, 0], [pad_amt, pad_amt], [pad_amt, pad_amt], [0, 0]],
+#                 mode="REFLECT"
+#             )
+#             blurred = tf.nn.conv2d(image_padded, kernel_2d, strides=[1, 1, 1, 1], padding='VALID')
+#             blurred = tf.squeeze(blurred, axis=[0, -1])
+        
+        
+        
+        
+        
+#         # Combine: inside polygon, keep original; outside, use blurred.
+#         # Expand mask for broadcasting.
+#         if tf.rank(image_float) == 3:
+#             mask_exp = tf.cast(tf.expand_dims(mask, axis=-1), image_float.dtype)
+#         else:
+#             mask_exp = tf.cast(mask, image_float.dtype)
+#         combined = image_float * mask_exp + blurred * (1 - mask_exp)
+        
+#         # Convert back to desired type.
+#         if image.dtype == tf.uint8:
+#             masked_image = tf.cast(tf.clip_by_value(combined * 255.0, 0, 255), config.IMAGE_PVALUE_TYPE)
+#         else:
+#             masked_image = tf.cast(tf.clip_by_value(combined, 0.0, 1.0), config.IMAGE_PVALUE_TYPE)
+#     else:
+#         # Case 2: No blurring; simply replace pixels outside the polygon with a gray value.
+#         if tf.rank(image) == 3 and tf.shape(image)[-1] == 3:
+#             # Use a Python if‑statement to check dtype.
+#             if image.dtype == tf.uint8:
+#                 mask_color = tf.constant([mask_value,
+#                                         mask_value,
+#                                         mask_value], dtype=image.dtype)
+#             else:
+#                 mask_color = tf.constant([mask_value / 255.0,
+#                                         mask_value / 255.0,
+#                                         mask_value / 255.0], dtype=image.dtype)
+#             mask_color_img = tf.ones_like(image) * mask_color
+#         else:
+#             mask_color_img = tf.ones_like(image) * (
+#                 mask_value if image.dtype == tf.uint8 else mask_value / 255.0
+#             )
+#         # Use tf.where to select pixels: if inside polygon, keep original.
+#         if tf.rank(image) == 3:
+#             mask_exp = tf.expand_dims(mask, axis=-1)
+#         else:
+#             mask_exp = mask
+#         masked_image = tf.where(mask_exp, image, mask_color_img)
+
+#     return masked_image
+
+@tf.function
+def approximate_gaussian_blur(image, num_passes=3):
+    # image is assumed to be of shape [1, H, W, C] (i.e. with a batch dimension)
+    for _ in range(num_passes):
+        image = tf.nn.avg_pool2d(image, ksize=20, strides=1, padding='SAME')
+    return image
+
+@tf.function
+def tf_mask_background(image, polygon, config):
+    """
+    Masks the background of an image outside a specified polygon.
+    
+    For color images, pixels outside the polygon are replaced by a gray value
+    (mask_value, mask_value, mask_value). For grayscale images, the replacement is mask_value.
+    When config.MASK_VALUE is between 5 and 50, a Gaussian blur is applied to the outside region.
+    
+    Args:
+        image: A TensorFlow tensor representing the image (H x W x C or H x W).
+        polygon: A tuple or list of two elements, where polygon[0] and polygon[1] are lists of
+                 x and y coordinates of the polygon vertices.
+        config: A configuration object with attributes:
+            - MASK_POLYGON_SMOOTHING (bool)
+            - MASK_VALUE (int)
+            - IMAGE_PVALUE_TYPE (tf.DType) e.g. tf.uint8
+        
+    Returns:
+        A tensor with the same shape as image with background masked.
+    """
+    # Get image height and width.
+    shape = tf.shape(image)
+    height = shape[0]
+    width = shape[1]
+
+    # Optionally smooth the polygon.
+    if config.MASK_POLYGON_SMOOTHING:
+        polygon = smooth_polygon(polygon, config)  # Assumed to be TF-compatible.
+
+    # Convert polygon coordinate lists to tensors of type float32.
+    poly_x = tf.cast(polygon[0], tf.float32)  # shape (n_points,)
+    poly_y = tf.cast(polygon[1], tf.float32)  # shape (n_points,)
+
+    # Create a meshgrid of pixel coordinates.
+    x_range = tf.cast(tf.range(width), tf.float32)
+    y_range = tf.cast(tf.range(height), tf.float32)
+    grid_x, grid_y = tf.meshgrid(x_range, y_range)  # both shape (height, width)
+
+    # Expand dims so that grid coordinates can be compared to each polygon vertex.
+    grid_x_exp = tf.expand_dims(grid_x, axis=-1)  # (H, W, 1)
+    grid_y_exp = tf.expand_dims(grid_y, axis=-1)  # (H, W, 1)
+
+    # Reshape polygon coordinates for broadcasting.
+    poly_x_exp = tf.reshape(poly_x, [1, 1, -1])  # (1, 1, n_points)
+    poly_y_exp = tf.reshape(poly_y, [1, 1, -1])  # (1, 1, n_points)
+
+    # Also get the "next" vertex for each edge (using tf.roll).
+    poly_x_next = tf.roll(poly_x, shift=-1, axis=0)
+    poly_y_next = tf.roll(poly_y, shift=-1, axis=0)
+    poly_x_next_exp = tf.reshape(tf.cast(poly_x_next, tf.float32), [1, 1, -1])
+    poly_y_next_exp = tf.reshape(tf.cast(poly_y_next, tf.float32), [1, 1, -1])
+
+    # Compute conditions for the ray-casting algorithm.
+    # Condition 1: The y-coordinate of the point is between the y's of the edge endpoints.
+    cond1 = tf.math.not_equal(poly_y_exp > grid_y_exp, poly_y_next_exp > grid_y_exp)
+    # Compute the x-coordinate at which the horizontal line at grid_y intersects the edge.
+    epsilon = 1e-6
+    slope = (poly_x_next_exp - poly_x_exp) / (poly_y_next_exp - poly_y_exp + epsilon)
+    intersect_x = slope * (grid_y_exp - poly_y_exp) + poly_x_exp
+    cond2 = grid_x_exp < intersect_x
+
+    # An edge is crossed if both conditions hold.
+    crossings = tf.logical_and(cond1, cond2)
+    # Count the number of crossings per pixel.
+    crossing_count = tf.reduce_sum(tf.cast(crossings, tf.int32), axis=-1)
+    # Inside polygon if count is odd.
+    mask = tf.math.mod(crossing_count, 2) == 1  # shape (height, width)
+
+    # Get the mask value from config.
+    mask_value = config.MASK_VALUE  # Python integer
+
+    # Case 1: When mask_value is in the range 5 to 50, apply (approximated) blur to the outside.
+    if mask_value in range(5, 50):
+        # Convert image to float if necessary.
+        if image.dtype == tf.uint8:
+            image_float = tf.cast(image, tf.float32) / 255.0
+        else:
+            image_float = tf.identity(image)
+        
+        # Instead of computing a large Gaussian kernel, we approximate the blur.
+        # Expand dims to add a batch dimension.
+        image_exp = tf.expand_dims(image_float, axis=0)
+        blurred = approximate_gaussian_blur(image_exp, num_passes= mask_value)
+        blurred = tf.squeeze(blurred, axis=0)
+        
+        # Combine: inside polygon use original, outside use blurred.
+        if tf.rank(image_float) == 3:
+            mask_exp = tf.cast(tf.expand_dims(mask, axis=-1), image_float.dtype)
+        else:
+            mask_exp = tf.cast(mask, image_float.dtype)
+        combined = image_float * mask_exp + blurred * (1 - mask_exp)
+        
+        if image.dtype == tf.uint8:
+            masked_image = tf.cast(tf.clip_by_value(combined * 255.0, 0, 255), config.IMAGE_PVALUE_TYPE)
+        else:
+            masked_image = tf.cast(tf.clip_by_value(combined, 0.0, 1.0), config.IMAGE_PVALUE_TYPE)
+    else:
+        # Case 2: No blurring; simply replace pixels outside polygon with a constant gray value.
+        if tf.rank(image) == 3 and tf.shape(image)[-1] == 3:
+            if image.dtype == tf.uint8:
+                mask_color = tf.constant([mask_value, mask_value, mask_value], dtype=image.dtype)
+            else:
+                mask_color = tf.constant([mask_value/255.0, mask_value/255.0, mask_value/255.0], dtype=image.dtype)
+            mask_color_img = tf.ones_like(image) * mask_color
+        else:
+            mask_color_img = tf.ones_like(image) * (mask_value if image.dtype == tf.uint8 else mask_value/255.0)
+        if tf.rank(image) == 3:
+            mask_exp = tf.expand_dims(mask, axis=-1)
+        else:
+            mask_exp = mask
+        masked_image = tf.where(mask_exp, image, mask_color_img)
+    
+    return masked_image
+
 
 def convert_annotations(input_annotations: dict, target_class: str) -> dict:
     """
@@ -535,6 +954,174 @@ def pad_and_resize(image: np.ndarray, target_dim: int, mask_value: int) -> np.nd
     
     return resized
 
+# @tf.function
+# def tf_pad_and_resize(image, target_dim):
+#     """
+#     Pads an input image to be square using the largest image dimension,
+#     then resizes it to a square image with dimensions (target_dim x target_dim).
+
+#     Args:
+#         image: A TensorFlow tensor representing the input image (grayscale or color).
+#         target_dim: An integer; the desired output dimension (target_dim x target_dim).
+#         mask_value: An integer; the value to use for padding. Although the original code
+#                     uses this to determine a constant fill value, here we replicate the edge
+#                     using "SYMMETRIC" padding.
+
+#     Returns:
+#         A TensorFlow tensor representing the padded and resized image. If the input image
+#         is of type tf.uint8, the output will also be tf.uint8; otherwise it remains in float.
+#     """
+#     # For uint8 images, convert to float32 [0,1] for processing.
+#     if image.dtype == tf.uint8:
+#         image_float = tf.cast(image, tf.float32) / 255.0
+#     else:
+#         image_float = image
+
+#     # Get image dimensions.
+#     shape = tf.shape(image_float)
+#     h = shape[0]
+#     w = shape[1]
+#     max_side = tf.maximum(h, w)
+
+#     # Calculate required padding.
+#     pad_height = max_side - h
+#     pad_width = max_side - w
+#     pad_top = tf.math.floordiv(pad_height, 2)
+#     pad_bottom = pad_height - pad_top
+#     pad_left = tf.math.floordiv(pad_width, 2)
+#     pad_right = pad_width - pad_left
+
+#     # Prepare the padding configuration depending on image rank.
+#     # Use dynamic rank to determine padding dimensions.
+#     rank = tf.rank(image_float)
+    
+#     def pad_color():
+#         return tf.stack([
+#             tf.stack([pad_top, pad_bottom]),
+#             tf.stack([pad_left, pad_right]),
+#             tf.stack([tf.constant(0, tf.int32), tf.constant(0, tf.int32)])
+#         ])
+
+#     def pad_grayscale():
+#         return tf.stack([
+#             tf.stack([pad_top, pad_bottom]),
+#             tf.stack([pad_left, pad_right])
+#         ])
+
+#     def pad_unsupported():
+#         err = tf.debugging.Assert(False, ["Unsupported image dimensions."])
+#         with tf.control_dependencies([err]):
+#             # Return a dummy tensor of the expected shape (for color images, 3×2)
+#             return tf.zeros([3, 2], dtype=tf.int32)
+
+#     paddings = tf.cond(
+#         tf.equal(rank, 3),
+#         pad_color,
+#         lambda: tf.cond(
+#             tf.equal(rank, 2),
+#             pad_grayscale,
+#             pad_unsupported
+#         )
+#     )
+    
+#     # if image_float.shape.ndims == 3:
+#     #     paddings = [[pad_top, pad_bottom], [pad_left, pad_right], [0, 0]]
+#     # elif image_float.shape.ndims == 2:
+#     #     paddings = [[pad_top, pad_bottom], [pad_left, pad_right]]
+#     # else:
+#     #     raise ValueError("Unsupported image dimensions.")
+
+#     # Pad the image using symmetric padding (which replicates edge values).
+#     padded = tf.pad(image_float, paddings, mode="SYMMETRIC")
+
+#     padded.set_shape([None, None, 3])
+#     # Resize the padded image to (target_dim, target_dim) with anti-aliasing.
+#     resized = tf.image.resize(padded, [target_dim, target_dim], antialias=False)
+
+#     # If the original image was uint8, scale back to [0,255] and cast accordingly.
+#     if image.dtype == tf.uint8:
+#         resized = tf.cast(tf.clip_by_value(resized * 255.0, 0, 255), image.dtype)
+
+#     return resized
+
+@tf.function
+def tf_pad_and_resize(image, target_dim):
+    """
+    Assumes all input images are RGB.
+    
+    Pads a non-square RGB image to square by extending the edge pixels along the shorter axis,
+    then resizes it to (target_dim x target_dim).
+
+    Steps:
+      1. Convert uint8 images to float32 in [0,1].
+      2. Squeeze out any extra dimensions.
+      3. Enforce a rank-3 shape ([height, width, 3]).
+      4. Depending on whether the image is wider or taller, pad vertically or horizontally
+         by repeating the edge row/column.
+      5. Ensure a static shape is set so tf.image.resize can operate.
+      6. Resize the padded image.
+      7. If the original image was uint8, convert back to that range.
+      
+    Args:
+      image: A tensor representing the image. Expected shape is [H, W, 3] or with extra singleton dims.
+      target_dim: The integer size of the output square image.
+      mask_value: Unused here.
+
+    Returns:
+      A resized image tensor, with the same dtype as the input.
+    """
+    orig_dtype = image.dtype
+    # Convert to float32 in [0, 1] if needed.
+    if orig_dtype == tf.uint8:
+        image = tf.cast(image, tf.float32) / 255.0
+
+    # Remove extra singleton dimensions (e.g. a batch dimension of 1).
+    image = tf.squeeze(image)
+    # Ensure the image is treated as RGB (rank 3).
+    image = tf.ensure_shape(image, [None, None, 3])
+    
+    # Get dynamic height and width.
+    shape = tf.shape(image)
+    h = shape[0]
+    w = shape[1]
+    
+    # Define functions to pad along the vertical axis (if h < w) or horizontal axis (if w < h).
+    def pad_vertical():
+        pad_total = w - h
+        pad_top = pad_total // 2
+        pad_bottom = pad_total - pad_top
+        top_pad = tf.repeat(tf.expand_dims(image[0, :, :], axis=0), pad_top, axis=0)
+        bottom_pad = tf.repeat(tf.expand_dims(image[-1, :, :], axis=0), pad_bottom, axis=0)
+        return tf.concat([top_pad, image, bottom_pad], axis=0)
+    
+    def pad_horizontal():
+        pad_total = h - w
+        pad_left = pad_total // 2
+        pad_right = pad_total - pad_left
+        left_pad = tf.repeat(tf.expand_dims(image[:, 0, :], axis=1), pad_left, axis=1)
+        right_pad = tf.repeat(tf.expand_dims(image[:, -1, :], axis=1), pad_right, axis=1)
+        return tf.concat([left_pad, image, right_pad], axis=1)
+    
+    # Choose the appropriate padding branch.
+    padded = tf.cond(tf.less(h, w),
+                     pad_vertical,
+                     lambda: tf.cond(tf.less(w, h),
+                                     pad_horizontal,
+                                     lambda: image))
+    
+    # Inform TensorFlow that the padded image is RGB.
+    padded = tf.ensure_shape(padded, [None, None, 3])
+    
+    # Resize the padded image.
+    resized = tf.image.resize(padded, [target_dim, target_dim], antialias=False)
+    
+    # Convert back to the original dtype if necessary.
+    if orig_dtype == tf.uint8:
+        resized = tf.cast(tf.clip_by_value(resized * 255.0, 0, 255), orig_dtype)
+    
+    return resized
+
+
 def rescale_image(image: np.ndarray, config: Config) -> np.ndarray:
     """
     Rescales an image's pixel values to a target range defined in config.rescale_pixels.
@@ -582,6 +1169,58 @@ def rescale_image(image: np.ndarray, config: Config) -> np.ndarray:
     else:
         scaled_image = scaled_image.astype(config.IMAGE_PVALUE_TYPE)
 
+    return scaled_image
+
+@tf.function
+def tf_rescale_image(image, config: Config):
+    """
+    Rescales an image's pixel values to a target range defined in config.RESCALE_PIXELS.
+    Also, if the image's dtype differs from config.IMAGE_PVALUE_TYPE, it is converted.
+
+    Args:
+        image: A TensorFlow tensor representing the input image.
+        config: A configuration object containing:
+            - RESCALE_PIXELS: A tuple/list with two numbers (target_min, target_max).
+            - IMAGE_PVALUE_TYPE: The desired tf.DType for the image (e.g., tf.uint8 or tf.float32).
+
+    Returns:
+        A TensorFlow tensor: The rescaled image with pixel values in the target range and of type config.IMAGE_PVALUE_TYPE.
+    """
+    # Ensure image is in the desired type.
+    if image.dtype != config.IMAGE_PVALUE_TYPE:
+        image = tf.cast(image, config.IMAGE_PVALUE_TYPE)
+    
+    # Use float32 for rescaling computations.
+    image_float = tf.cast(image, tf.float32)
+    
+    # Determine input range by checking the maximum pixel value.
+    max_val = tf.reduce_max(image_float)
+    input_min, input_max = tf.cond(
+        tf.less_equal(max_val, 1.0),
+        lambda: (tf.constant(0.0, tf.float32), tf.constant(1.0, tf.float32)),
+        lambda: (tf.constant(0.0, tf.float32), tf.constant(255.0, tf.float32))
+    )
+    
+    # Get target range from config.
+    target_min = tf.constant(config.RESCALE_PIXELS[0], tf.float32)
+    target_max = tf.constant(config.RESCALE_PIXELS[1], tf.float32)
+    
+    # Clip image values to the detected input range.
+    image_clipped = tf.clip_by_value(image_float, input_min, input_max)
+    
+    # Avoid division by zero. (In our case input_max != input_min, but this is a safe guard.)
+    scaled_image = tf.cond(
+        tf.equal(input_max, input_min),
+        lambda: tf.fill(tf.shape(image_clipped), target_min),
+        lambda: ((image_clipped - input_min) / (input_max - input_min)) * (target_max - target_min) + target_min
+    )
+    
+    # If the target type is integer, round the values before casting.
+    if config.IMAGE_PVALUE_TYPE in [tf.uint8, tf.int32, tf.int16]:
+        scaled_image = tf.cast(tf.round(scaled_image), config.IMAGE_PVALUE_TYPE)
+    else:
+        scaled_image = tf.cast(scaled_image, config.IMAGE_PVALUE_TYPE)
+    
     return scaled_image
 
 def preprocess_record(
@@ -644,6 +1283,74 @@ def preprocess_record(
         image = rescale_image(image, config)
 
     return image, record[3], record[4]
+
+@tf.function
+def tf_preprocess_record(record1, config):
+    """
+    Preprocess a single record in the tooth classification data pipeline.
+    This function loads an image specified by the input record, applies various
+    preprocessing steps such as white-balancing, background masking, padding/resizing,
+    and optional pixel rescaling based on the configuration provided.
+
+    Parameters:
+        record1 (list or tuple): Expected to contain:
+            - record1[0]: image filename (tf.string)
+            - record1[1:3]: tooth polygon/mask (can be tensors or arrays)
+            - record1[3]: associated label (e.g. tf.int32)
+            - record1[4]: an additional flag (e.g. tf.bool)
+        config: A configuration object with attributes like:
+            - DATA_DIR (str)
+            - IMAGE_DIR (str)
+            - NORMALIZE_IMAGES (bool)
+            - MASK_BG (bool)
+            - TARGET_DIM (int or tuple)
+            - MASK_VALUE (numeric)
+            - RESCALE_PIXELS (list, where element 0 being not None means rescaling is enabled)
+            
+    Returns:
+        A tuple: (preprocessed image, label, additional_flag)
+    """
+    # (Assumes record1 elements are already tf.Tensors; no conversion loop is needed)
+    img_name = record1[0]  # expected to be a tf.string
+
+    # Build full image path using tf.string.join.
+    # Note: os.sep is used as separator; you may also use "/" if that is acceptable.
+    img_path = tf.strings.join([config.DATA_DIR, config.IMAGE_DIR, img_name], separator=os.sep)
+
+    
+
+    # Read the image file and decode it.
+    image_file = tf.io.read_file(img_path)
+    
+    # Check if the file exists. Since TF does not have a direct graph equivalent of os.path.exists,
+    static_img_path = tf.get_static_value(img_path)
+    tf.debugging.assert_greater(
+        tf.size(image_file),
+        0,
+        message="Image file is empty or not found: " + (static_img_path if static_img_path is not None else "unknown")
+    )
+    
+    
+    image = tf.image.decode_image(image_file, channels=3)
+
+    # If image normalization is enabled, apply the white-balancing function.
+    if config.NORMALIZE_IMAGES:
+        image = tf_dental_gray_world_white_balance(image)
+
+    # Apply background masking if enabled.
+    if config.MASK_BG:
+        # Pass the polygon data (record1[1:3]) along with the image and config.
+        image = tf_mask_background(image, record1[1:3], config)
+
+    # Pad and resize the image.
+    image = tf_pad_and_resize(image, target_dim=config.TARGET_DIM)
+
+    # Optionally rescale the image pixels.
+    if config.RESCALE_PIXELS[0] is not None:
+        image = tf_rescale_image(image, config)
+
+    # Return the processed image along with label and additional flag.
+    return image, record1[3], record1[4]
 
 def preprocess_raw_dataset(
     json_annotations_path: str,
@@ -974,6 +1681,77 @@ def build_tf_dataset(
         ds = ds.shuffle(buffer_size=500, reshuffle_each_iteration=True)#len(records), reshuffle_each_iteration=True)
     
     # Batch the data and prefetch for optimal pipeline performance.
+    ds = ds.batch(config.BATCH_SIZE)
+    ds = ds.prefetch(buffer_size=tf.data.AUTOTUNE)
+    
+    return ds
+
+def tf_build_tf_dataset(records: list, config: Config) -> tf.data.Dataset:
+    # Create a rotation layer for augmentation outside the preprocessing function.
+    random_rotation_layer = tf.keras.layers.RandomRotation(
+        factor=(-0.1, 0.1), fill_mode="nearest"
+    )
+    
+    # if config.MASK_VALUE in range(5,50):
+    #     init_cached_gaussian_kernel(config)
+    
+    def _load_and_preprocess(*record_parts):
+        # Convert record parts to a list.
+        record = list(record_parts)
+        # Directly call the TensorFlow version of preprocess_record.
+        image, label, aug = tf_preprocess_record(record, config)
+        
+        # Set static shapes if known.
+        image.set_shape([config.INPUT_SHAPE[0], config.INPUT_SHAPE[1], config.INPUT_SHAPE[2]])
+        label.set_shape([])
+        aug.set_shape([])
+        
+        # Define augmentation function.
+        def augment_fn(img):
+            img = tf.image.random_flip_left_right(img)
+            img = random_rotation_layer(img)
+            return img
+        
+        # Apply augmentation conditionally.
+        image = tf.cond(aug, lambda: augment_fn(image), lambda: image)
+        
+        # Convert label: if it matches TARGET_CLASS, output 1; else 0.
+        label_int = tf.cond(
+            tf.equal(label, tf.constant(config.TARGET_CLASS, dtype=tf.string)),
+            lambda: tf.constant(1., dtype=tf.float32),
+            lambda: tf.constant(0., dtype=tf.float32)
+        )
+        
+        return image, label_int
+
+    # Generator function yielding records.
+    def record_generator():
+        for record in records:
+            yield tuple(record)
+
+    output_signature = (
+        tf.TensorSpec(shape=(), dtype=tf.string),
+        tf.TensorSpec(shape=(None,), dtype=tf.int32),
+        tf.TensorSpec(shape=(None,), dtype=tf.int32),
+        tf.TensorSpec(shape=(), dtype=tf.string),
+        tf.TensorSpec(shape=(), dtype=tf.bool)
+    )
+
+    # Build dataset from generator.
+    ds = tf.data.Dataset.from_generator(
+        record_generator,
+        output_signature=output_signature
+    )
+    
+    # Map the _load_and_preprocess function in parallel.
+    ds = ds.map(_load_and_preprocess, num_parallel_calls=tf.data.AUTOTUNE)
+    ds = ds.cache()
+    
+    # Optionally shuffle the dataset.
+    if config.SHUFFLE_DATASET:
+        ds = ds.shuffle(buffer_size=500, reshuffle_each_iteration=True)
+    
+    # Batch and prefetch the data.
     ds = ds.batch(config.BATCH_SIZE)
     ds = ds.prefetch(buffer_size=tf.data.AUTOTUNE)
     

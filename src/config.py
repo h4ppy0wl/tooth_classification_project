@@ -1,7 +1,8 @@
 import numpy as np
+import tensorflow as tf
 from dataclasses import dataclass
 
-@dataclass
+@dataclass(frozen=True)
 class Config:
     """
         A configuration class that contains the main parameters for the project.
@@ -57,7 +58,7 @@ class Config:
     
     TARGET_DIM: int = 256
     INPUT_SHAPE: tuple = (TARGET_DIM, TARGET_DIM, 3)
-    MASK_VALUE: int = 25 #if set to (5-50), the background will be blur and the value will be used for skimage.filter.gaussian sigma value
+    MASK_VALUE: int = 8 #if set to (5-49), the background will be blur and the value will be used for skimage.filter.gaussian sigma value
     ANTIALIZING_IN_RESIZING: bool = False
     
     
@@ -74,7 +75,7 @@ class Config:
     DARK_IMAGE_THRESHOLD: float = 0.25
     MASK_POLYGON_SMOOTHING: bool = False
     POLYGON_SMOOTHING_TOLERANCE: float = 0.015
-    IMAGE_PVALUE_TYPE: np.dtype = np.float32
+    IMAGE_PVALUE_TYPE: np.dtype = tf.float32 #np.float32
     RESCALE_PIXELS: tuple = (0, 255) #define based on model requirement. resnet 
     OVERSAMPLE_FACTOR: int = 3 
     
