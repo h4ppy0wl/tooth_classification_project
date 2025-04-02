@@ -69,7 +69,7 @@ def main():
     # 7. Train the model.
     t0 = time.time()
     print("Starting training...")
-    h1, h2 = train_transfer_model(my_model, train_ds, val_ds, config, save_models=True)
+    trained_model, h1, h2 = train_transfer_model(my_model, train_ds, val_ds, config, save_models=True)
     print(f"[Step 8] Model training completed in {time.time() - t0:.2f} seconds.")
     
     overall_time = time.time() - overall_start
@@ -107,7 +107,7 @@ def main():
     # Evaluate the trained model on the test dataset.
     t0 = time.time()
     print("Evaluating the trained model on the test dataset...")
-    results = my_model.evaluate(test_ds, verbose=1)
+    results = trained_model.evaluate(test_ds, verbose=1)
     print(f"Test evaluation metrics: {results}")
     print(f"[Test Step] Model evaluation completed in {time.time() - t0:.2f} seconds.")
     

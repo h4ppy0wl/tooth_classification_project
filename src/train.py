@@ -218,4 +218,4 @@ def train_transfer_model(mymodel, train_dataset, val_dataset, config: Config, sa
     
     log_history(fine_tune_history, log_dir, f"fine_tune_history_{num}.json")
     
-    return initial_history, fine_tune_history
+    return mymodel , initial_history, fine_tune_history
