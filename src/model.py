@@ -67,10 +67,16 @@ def build_pretrained_model(architecture,
     
     # option 2: GlobalAveragePooling2D + BN + Dense256 + Dropout05 + Dense
     gap = layers.GlobalAveragePooling2D()(features)
-    bn = layers.BatchNormalization()(gap)  # helps with feature scale
-    dns = layers.Dense(head_dense_units, activation='relu', kernel_regularizer=tf.keras.regularizers.l2(Config.L2_REGULARIZATION))(bn)
-    do = layers.Dropout(Config.DROPOUT_RATE)(dns)
-    classification_output = layers.Dense(1, activation='sigmoid', name='classification_output')(do)
+    bn1 = layers.BatchNormalization()(gap)  # helps with feature scale
+    dns1 = layers.Dense(head_dense_units, activation='relu', kernel_regularizer=tf.keras.regularizers.l2(Config.L2_REGULARIZATION))(bn1)
+    bn2 = layers.BatchNormalization()(dns1)  # helps with feature scale
+    do1 = layers.Dropout(Config.DROPOUT_RATE)(bn2)
+    dns2 = layers.Dense(head_dense_units//2, activation='relu', kernel_regularizer=tf.keras.regularizers.l2(Config.L2_REGULARIZATION))(do1)
+    bn3 = layers.BatchNormalization()(dns2)  # helps with feature scale
+    do2 = layers.Dropout(Config.DROPOUT_RATE)(bn3)
+    dns3 = layers.Dense(head_dense_units//4, activation='relu', kernel_regularizer=tf.keras.regularizers.l2(Config.L2_REGULARIZATION))(do2)
+    do3 = layers.Dropout(Config.DROPOUT_RATE)(dns3)
+    classification_output = layers.Dense(1, activation='sigmoid', name='classification_output')(do3)
     
     # option 3: Flatten + Dense256 + Dropout05 + Dense
     # x = layers.Flatten()(x)  # Flatten the spatial feature maps

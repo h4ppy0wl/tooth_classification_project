@@ -59,7 +59,7 @@ class Config:
     
     TARGET_DIM: int = 256
     INPUT_SHAPE: tuple = (TARGET_DIM, TARGET_DIM, 3)
-    MASK_VALUE: int = 128 #if set to (5-49), the background will be blur and the value will be used for skimage.filter.gaussian sigma value
+    MASK_VALUE: int = 0 #if set to (5-49), the background will be blur and the value will be used for skimage.filter.gaussian sigma value
     ANTIALIZING_IN_RESIZING: bool = False
     
     
@@ -85,11 +85,11 @@ class Config:
     HEAD_DENSE_UNITS: int = 128
     L2_REGULARIZATION: float = 0.001
     DROPOUT_RATE: float = 0.3
-    INITIAL_LR: float = 1e-1
+    INITIAL_LR: float = 1e-2
     NUM_INITIAL_EPOCHS: int = 10
-    NUM_FINE_TUNE_EPOCHS: int = 0
+    NUM_FINE_TUNE_EPOCHS: int = 15
     FINE_TUNE_LR: float = 1e-3
-    FINE_TUNE_FROM_LAYER: int = 22
+    FINE_TUNE_FROM_LAYER: int = 81 #conv4 143#conv5
     
 
     

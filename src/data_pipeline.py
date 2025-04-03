@@ -432,7 +432,7 @@ def smooth_polygon(polygon: dict, config: Config) -> dict:
 
     return smoothed_polygon
 
-def mask_background(image: np.ndarray, polygon: list, config: Config) -> np.ndarray:
+def resize_and_mask_background(image: np.ndarray, polygon: list, config: Config) -> np.ndarray:
     """
     Masks the background of an image outside a specified polygon.
 
@@ -459,13 +459,28 @@ def mask_background(image: np.ndarray, polygon: list, config: Config) -> np.ndar
     rr, cc = skimage.draw.polygon(all_points_y, all_points_x, shape=mask.shape)
     mask[rr, cc] = True
 
-    
 
+    # Determine the scaling factor.
+    dmax = max(height, width)
+    scale = config.TARGET_DIM / dmax
+    if dmax == height:
+        new_h = config.TARGET_DIM
+        new_w = int(round(width * scale))
+    else:
+        new_h = int(round(height * scale))
+        new_w = config.TARGET_DIM
+    if scale > 1:
+        resized_img = transform.resize(image, (new_h, new_w), preserve_range= True, anti_aliasing= False, order=1)
+    if scale <= 1:
+        resized_img = transform.resize(image, (new_h, new_w), preserve_range= True, anti_aliasing= config.ANTIALIZING_IN_RESIZING, order=1)
+    
+    resized_mask = transform.resize(mask, (new_h, new_w), preserve_range= True, anti_aliasing= False, order=0)
+    resized_mask = (resized_mask > 0.5)
     # Define the gray color using a default threshold value of 128
     mask_value = config.MASK_VALUE
     if mask_value in range(5,50):
         # Convert image to float [0,1] for skimage
-        float_img = image.astype(np.float32) / 255.0
+        float_img = resized_img.astype(np.float32) / 255.0
 
         # Apply keras.filters.gaussian blur to the entire image
         # 'multichannel=True' ensures the filter is applied per channel
@@ -474,21 +489,22 @@ def mask_background(image: np.ndarray, polygon: list, config: Config) -> np.ndar
         # Combine: inside polygon = original; outside polygon = blurred
         # (mask is [H,W], but broadcasting works for color channels)
         out = blurred.copy()
-        out[mask] = float_img[mask]
+        out[resized_mask] = float_img[resized_mask]
 
         # Convert back to uint8 [0..255]
         masked_image = (out * 255.0).astype(config.IMAGE_PVALUE_TYPE)
     else:
         # Make a copy of the original image to apply the mask
-        masked_image = image.copy()
+        masked_image = resized_img.copy()
         mask_color = (mask_value, mask_value, mask_value) if image.ndim == 3 else mask_value
 
         # Replace pixels outside the polygon (mask value != 1) with gray
-        masked_image[~mask] = mask_color
+        masked_image[~resized_mask] = mask_color
         # if image.ndim == 3:
         #     masked_image[mask != 1] = mask_color
         # else:
         #     masked_image[mask != 1] = mask_color
+
 
     return masked_image
 
@@ -951,11 +967,66 @@ def pad_and_resize(image: np.ndarray, target_dim: int, mask_value: int) -> np.nd
     # resized = tf.image.resize(image, (target_dim, target_dim), antialias= Config.ANTIALIZING_IN_RESIZING)
     # resized = resized / 255.0  # scale to [0, 1]
     # The resize function returns a float image in [0,1]. If the input is of type uint8, rescale to 0-255.
-    resized = transform.resize(padded, (target_dim, target_dim), anti_aliasing= Config.ANTIALIZING_IN_RESIZING)
+    resized = transform.resize(padded, (target_dim, target_dim), anti_aliasing= Config.ANTIALIZING_IN_RESIZING, order=2)
     if image.dtype == np.uint8:
         resized = (resized * 255).astype(np.uint8)
     
     return resized
+
+
+def pad_image(image: np.ndarray, target_dim: int, mask_value: int) -> np.ndarray:
+    """
+    Pads an input image to be square using constant padding.
+    
+    The image is padded so that its height and width become equal to the maximum
+    of the original dimensions. The padding is filled with the mask_value (or
+    mask_value/255.0 for floating point images with values in [0,1]).
+    
+    Parameters:
+        image (np.ndarray): Input image array (grayscale or color).
+        mask_value (int): The value to use for padding (e.g. 128 for gray).
+    
+    Returns:
+        np.ndarray: The padded image.
+    """
+    h, w = image.shape[:2]
+    max_side = target_dim #max(h, w)
+    
+    # Calculate required padding amounts.
+    pad_height = max_side - h
+    pad_width  = max_side - w
+    pad_top    = pad_height // 2
+    pad_bottom = pad_height - pad_top
+    pad_left   = pad_width // 2
+    pad_right  = pad_width - pad_left
+    
+    # Determine the constant value for padding based on image dtype.
+    if image.dtype == np.uint8:
+        pad_const = mask_value  # e.g. 128
+    elif np.issubdtype(image.dtype, np.floating) and image.max() <= 1.0:
+        pad_const = mask_value / 255.0  # e.g. 128 -> ~0.5
+    else:
+        pad_const = mask_value  # fallback
+
+    # Pad image using constant padding.
+    if image.ndim == 3:
+        padded = np.pad(
+            image,
+            ((pad_top, pad_bottom), (pad_left, pad_right), (0, 0)),
+            mode='edge',
+            # constant_values=((pad_const, pad_const), (pad_const, pad_const), (0, 0))
+        )
+    elif image.ndim == 2:
+        padded = np.pad(
+            image,
+            ((pad_top, pad_bottom), (pad_left, pad_right)),
+            mode='edge',
+            # constant_values=pad_const
+        )
+    else:
+        raise ValueError("Unsupported image dimensions.")
+    
+    return padded
 
 # @tf.function
 # def tf_pad_and_resize(image, target_dim):
@@ -1274,16 +1345,17 @@ def preprocess_record(
     
     if config.NORMALIZE_IMAGES:
         image = dental_gray_world_white_balance(image)
+        #output is float [0-1]
     # Mask
     if config.MASK_BG:
-        image = mask_background(image = image, polygon = record[1:3], config = config)
+        image = resize_and_mask_background(image = image, polygon = record[1:3], config = config)
     
     # Pad and resize
-    image = pad_and_resize(image, target_dim=config.TARGET_DIM, mask_value= config.MASK_VALUE)
+    image = pad_image(image, target_dim=config.TARGET_DIM, mask_value= config.MASK_VALUE)
     
     #rescale:
-    if config.RESCALE_PIXELS[0] is not None:
-        image = rescale_image(image, config)
+    # if config.RESCALE_PIXELS[0] is not None:
+    #     image = rescale_image(image, config)
 
     return image, record[3], record[4]
 
@@ -1888,7 +1960,7 @@ def preprocess_and_save_images(all_records: list, config: Config, set_name: str)
         print(f"Processed folder '{processed_folder}' and records file exist. Loading records...")
         with open(records_file, "r") as f:
             updated_records = json.load(f)
-        return updated_records
+        return updated_records, folder_code
     
     # If the folder exists but records file doesn't, or if the folder doesn't exist, process the images.
     os.makedirs(processed_folder, exist_ok=True)

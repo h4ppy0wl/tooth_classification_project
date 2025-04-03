@@ -101,7 +101,7 @@ def train_transfer_model(mymodel, train_dataset, val_dataset, config: Config, sa
     tensorboard_callback = tf.keras.callbacks.TensorBoard(
         log_dir=log_dir,
         update_freq='epoch',
-        histogram_freq=1,      # Frequency (in epochs) at which to compute activation and weight histograms.
+        histogram_freq=0,      # Frequency (in epochs) at which to compute activation and weight histograms.
         write_graph=True,      # Whether to visualize the graph in TensorBoard.
         write_images=True      # Whether to save model weights as images.
     )
@@ -132,7 +132,7 @@ def train_transfer_model(mymodel, train_dataset, val_dataset, config: Config, sa
             tf.keras.metrics.Precision(name='precision'),
             tf.keras.metrics.Recall(name='recall'),
             tf.keras.metrics.AUC(name='auc'),
-            tf.keras.metrics.F1Score(name='f1score')
+            tf.keras.metrics.F1Score(name='f1score', average = 'weighted')
         ]
     )
     
@@ -142,7 +142,7 @@ def train_transfer_model(mymodel, train_dataset, val_dataset, config: Config, sa
         validation_data=val_dataset,
         epochs=i_epochs,
         callbacks=initial_callbacks,
-        verbose = 1
+        verbose = 1,
     )
     
     log_history(initial_history, log_dir, f"initial_training_history_{num}.json")
@@ -197,7 +197,7 @@ def train_transfer_model(mymodel, train_dataset, val_dataset, config: Config, sa
                 tf.keras.metrics.Precision(name='precision'),
                 tf.keras.metrics.Recall(name='recall'),
                 tf.keras.metrics.AUC(name='auc'),
-                tf.keras.metrics.F1Score(name='f1score')
+                tf.keras.metrics.F1Score(name='f1score', average = 'weighted')
             ]
         )
 

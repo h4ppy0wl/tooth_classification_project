@@ -101,9 +101,9 @@ def main():
     # Define a list of parameter combinations for experiments.
     # Adjust these combinations as needed.
     experiment_params = [
-        {"MASK_VALUE": 0, "AUGMENT_DATA": True,  "NORMALIZE_IMAGES": True,  "MASK_BG": True, "HEAD_DENSE_UNITS": 128},
-        {"MASK_VALUE": 15, "AUGMENT_DATA": True, "NORMALIZE_IMAGES": True,  "MASK_BG": True, "HEAD_DENSE_UNITS": 256},
-        {"MASK_VALUE": 128, "AUGMENT_DATA": True,  "NORMALIZE_IMAGES": False, "MASK_BG": True, "HEAD_DENSE_UNITS": 256},
+        {"MASK_VALUE": 128, "AUGMENT_DATA": True,  "NORMALIZE_IMAGES": True,  "MASK_BG": True, "HEAD_DENSE_UNITS": 128},
+        {"MASK_VALUE": 10, "AUGMENT_DATA": True, "NORMALIZE_IMAGES": True,  "MASK_BG": True, "HEAD_DENSE_UNITS": 256},
+        {"MASK_VALUE": 0, "AUGMENT_DATA": True,  "NORMALIZE_IMAGES": False, "MASK_BG": True, "HEAD_DENSE_UNITS": 256},
     ]
 
     # CSV file to collect results.
@@ -128,18 +128,18 @@ def main():
             for key, value in params.items():
                 setattr(config, key, value)
 
-            # Capture all terminal output for this experiment.
-            log_capture = io.StringIO()
-            with contextlib.redirect_stdout(log_capture):
-                result = run_experiment(config, exp_num=exp_i)
-            logs = log_capture.getvalue()
+            # # Capture all terminal output for this experiment.
+            # log_capture = io.StringIO()
+            # with contextlib.redirect_stdout(log_capture):
+            result = run_experiment(config, exp_num=exp_i)
+            # logs = log_capture.getvalue()
 
-            # Save the captured logs into the current experiment log folder.
-            experiment_log_dir = result["current_log_dir"]
-            os.makedirs(experiment_log_dir, exist_ok=True)
-            log_file_path = os.path.join(experiment_log_dir, "experiment_log.txt")
-            with open(log_file_path, "w") as log_file:
-                log_file.write(logs)
+            # # Save the captured logs into the current experiment log folder.
+            # experiment_log_dir = result["current_log_dir"]
+            # os.makedirs(experiment_log_dir, exist_ok=True)
+            # log_file_path = os.path.join(experiment_log_dir, "experiment_log.txt")
+            # with open(log_file_path, "w") as log_file:
+            #     log_file.write(logs)
 
             # Use the last folder name (basename) of current_log_dir as experiment id.
             experiment_id = os.path.basename(os.path.normpath(result["current_log_dir"]))
