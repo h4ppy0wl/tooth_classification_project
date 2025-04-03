@@ -17,7 +17,8 @@ from src.config import Config
 def build_pretrained_model(architecture, 
                             input_shape: tuple[int,int,int],
                             trainable_base: bool = False,
-                            fine_tune_at: int = None):
+                            fine_tune_at: int = None,
+                            head_dense_units: int = 128):
     """
     architecture: str, one of {'resnet50','inceptionv3','efficientnetb0', ...}
     freeze: whether to freeze base model layers initially
@@ -67,7 +68,7 @@ def build_pretrained_model(architecture,
     # option 2: GlobalAveragePooling2D + BN + Dense256 + Dropout05 + Dense
     gap = layers.GlobalAveragePooling2D()(features)
     bn = layers.BatchNormalization()(gap)  # helps with feature scale
-    dns = layers.Dense(128, activation='relu', kernel_regularizer=tf.keras.regularizers.l2(Config.L2_REGULARIZATION))(bn)
+    dns = layers.Dense(head_dense_units, activation='relu', kernel_regularizer=tf.keras.regularizers.l2(Config.L2_REGULARIZATION))(bn)
     do = layers.Dropout(Config.DROPOUT_RATE)(dns)
     classification_output = layers.Dense(1, activation='sigmoid', name='classification_output')(do)
     
@@ -249,14 +250,16 @@ def create_model(
         model  = build_pretrained_model(
             architecture= config.MODEL_ARCHITECTURE,
             input_shape= config.INPUT_SHAPE,
+            head_dense_units=config.HEAD_DENSE_UNITS,
             trainable_base=kwargs.get('trainable_base', False),
-            fine_tune_at=kwargs.get('fine_tune_at', None))
+            fine_tune_at=kwargs.get('fine_tune_at', None),
+            )
         
     elif model_type == "transfer_attention":
         model  = build_pretrained_attention_model(architecture= config.MODEL_ARCHITECTURE,
                             input_shape= config.INPUT_SHAPE,
                             trainable_base=kwargs.get('trainable_base', False),
-                            fine_tune_at=kwargs.get('fine_tune_at', None))
+                            fine_tune_at=kwargs.get('fine_tune_at', None),)
     else:
         raise ValueError(f"Unknown model_type: {model_type}")
     

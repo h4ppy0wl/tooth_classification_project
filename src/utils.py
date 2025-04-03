@@ -98,8 +98,8 @@ def log_config(config, path):
     Logs the configuration parameters to a text file in the same directory as specified by config.LOG_DIR.
     """
     # Ensure the log directory exists.
-    os.makedirs(config.LOG_DIR, exist_ok=True)
-    config_path = os.path.join(config.LOG_DIR, "config.txt")
+    os.makedirs(path, exist_ok=True)
+    config_path = os.path.join(path, "config.txt")
     
     # Convert the dataclass to a dictionary.
     config_dict = asdict(config)

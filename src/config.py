@@ -2,7 +2,7 @@ import numpy as np
 import tensorflow as tf
 from dataclasses import dataclass
 
-@dataclass(frozen=True)
+@dataclass
 class Config:
     """
         A configuration class that contains the main parameters for the project.
@@ -82,11 +82,12 @@ class Config:
     
     
     MODEL_ARCHITECTURE: str = "resnet50"
+    HEAD_DENSE_UNITS: int = 128
     L2_REGULARIZATION: float = 0.001
     DROPOUT_RATE: float = 0.3
     INITIAL_LR: float = 1e-1
-    NUM_INITIAL_EPOCHS: int = 7
-    NUM_FINE_TUNE_EPOCHS: int = 15
+    NUM_INITIAL_EPOCHS: int = 10
+    NUM_FINE_TUNE_EPOCHS: int = 0
     FINE_TUNE_LR: float = 1e-3
     FINE_TUNE_FROM_LAYER: int = 22
     

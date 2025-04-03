@@ -63,8 +63,8 @@ def train_attention_model( config: Config,
 
 
 def train_transfer_model(mymodel, train_dataset, val_dataset, config: Config, save_models = True,
-                        initial_weights_path="initial_weights",
-                        fine_tuned_weights_path="fine_tuned_weights",
+                        initial_weights_name="initial_weights",
+                        fine_tuned_weights_name="fine_tuned_weights",
                         num = 1):
     """
     Train a transfer learning model in two phases: initial training (with a frozen base) then fine-tuning.
@@ -128,11 +128,11 @@ def train_transfer_model(mymodel, train_dataset, val_dataset, config: Config, sa
                 name="binary_focal_crossentropy"
                 ),
         metrics=[
-            tf.keras.metrics.BinaryAccuracy(name='accuracy'),
+            # tf.keras.metrics.BinaryAccuracy(name='accuracy'),
             tf.keras.metrics.Precision(name='precision'),
             tf.keras.metrics.Recall(name='recall'),
             tf.keras.metrics.AUC(name='auc'),
-            # tf.keras.metrics.F1Score(name='f1score')
+            tf.keras.metrics.F1Score(name='f1score')
         ]
     )
     
@@ -147,75 +147,74 @@ def train_transfer_model(mymodel, train_dataset, val_dataset, config: Config, sa
     
     log_history(initial_history, log_dir, f"initial_training_history_{num}.json")
     # Save weights after initial training.
-    if save_models:
-        path = f"{initial_weights_path}_{num}_.h5"
-        mymodel.save_weights(path)
-        print(f"Initial model weights saved to: {path}")
-    
+    if config.NUM_FINE_TUNE_EPOCHS == 0:
+        if save_models:
+            path = os.path.join(log_dir,f"{initial_weights_name}_{num}_.h5")
+            mymodel.save_weights(path)
+            print(f"Initial model weights saved to: {path}")
+    else:
+        # Phase 2: Fine-tuning.
+        print("************ Fine-tuning model **************** ")
+        # Unfreeze all layers initially.
+        mymodel.trainable = True
 
-    
-    # Phase 2: Fine-tuning.
-    print("************ Fine-tuning model **************** ")
-    # Unfreeze all layers initially.
-    mymodel.trainable = True
+        if fine_tune_at is not None:
+            for i, layer in enumerate(mymodel.layers):
+                if i < fine_tune_at:
+                    layer.trainable = False
+                else:
+                    layer.trainable = True
+            print(f"Layer {fine_tune_at} and higher set to trainable in fine tuning step.")
 
-    if fine_tune_at is not None:
-        for i, layer in enumerate(mymodel.layers):
-            if i < fine_tune_at:
-                layer.trainable = False
-            else:
-                layer.trainable = True
-        print(f"Layer {fine_tune_at} and higher set to trainable in fine tuning step.")
-
-    # Define callbacks for the fine-tuning phase:
-    fine_tune_callbacks = [
-        # EarlyStopping(monitor='loss', patience=3, verbose=1, restore_best_weights=True),
-        EarlyStopping(monitor='val_loss', patience=5, verbose=1, restore_best_weights=True),
-        ReduceLROnPlateau(
-            monitor='val_loss',  # You can also set this to 'loss' if you prefer
-            factor=0.5,          # Factor by which the LR will be reduced
-            patience=2,          # Number of epochs with no improvement after which LR is reduced
-            min_lr=1e-7,         # Lower bound on the learning rate
-            verbose=1
-        ),
-        tensorboard_callback
-    ]
-    
-    # Recompile with a lower learning rate.
-    mymodel.compile(
-        optimizer=Adam(learning_rate=fine_tune_lr),
-        loss=BinaryFocalCrossentropy(
-                apply_class_balancing=True,
-                # alpha=0.25,
-                gamma=2.0,
-                from_logits=False,
-                label_smoothing=0.0,
-                reduction="sum_over_batch_size",
-                name="binary_focal_crossentropy"
-                ),
-        metrics=[
-            tf.keras.metrics.BinaryAccuracy(name='accuracy'),
-            tf.keras.metrics.Precision(name='precision'),
-            tf.keras.metrics.Recall(name='recall'),
-            tf.keras.metrics.AUC(name='auc'),
-            # tf.keras.metrics.F1Score(name='f1score')
+        # Define callbacks for the fine-tuning phase:
+        fine_tune_callbacks = [
+            # EarlyStopping(monitor='loss', patience=3, verbose=1, restore_best_weights=True),
+            EarlyStopping(monitor='val_loss', patience=5, verbose=1, restore_best_weights=True),
+            ReduceLROnPlateau(
+                monitor='val_loss',  # You can also set this to 'loss' if you prefer
+                factor=0.5,          # Factor by which the LR will be reduced
+                patience=2,          # Number of epochs with no improvement after which LR is reduced
+                min_lr=1e-7,         # Lower bound on the learning rate
+                verbose=1
+            ),
+            tensorboard_callback
         ]
-    )
+        
+        # Recompile with a lower learning rate.
+        mymodel.compile(
+            optimizer=Adam(learning_rate=fine_tune_lr),
+            loss=BinaryFocalCrossentropy(
+                    apply_class_balancing=True,
+                    # alpha=0.25,
+                    gamma=2.0,
+                    from_logits=False,
+                    label_smoothing=0.0,
+                    reduction="sum_over_batch_size",
+                    name="binary_focal_crossentropy"
+                    ),
+            metrics=[
+                # tf.keras.metrics.BinaryAccuracy(name='accuracy'),
+                tf.keras.metrics.Precision(name='precision'),
+                tf.keras.metrics.Recall(name='recall'),
+                tf.keras.metrics.AUC(name='auc'),
+                tf.keras.metrics.F1Score(name='f1score')
+            ]
+        )
 
-    fine_tune_history = mymodel.fit(
-        train_dataset,
-        validation_data=val_dataset,
-        epochs=fine_tune_epochs,
-        callbacks=fine_tune_callbacks,
-        verbose = 1
-    )
+        fine_tune_history = mymodel.fit(
+            train_dataset,
+            validation_data=val_dataset,
+            epochs=fine_tune_epochs,
+            callbacks=fine_tune_callbacks,
+            verbose = 1
+        )
 
-    # Save weights after fine-tuning.
-    if save_models:
-        path = f"{fine_tuned_weights_path}_{num}_.h5"
-        mymodel.save_weights(path)
-        print(f"Fine tuned model weights saved to: {path}")
+        # Save weights after fine-tuning.
+        if save_models:
+            path = os.path.join(log_dir,f"{fine_tuned_weights_name}_{num}_.h5")
+            mymodel.save_weights(path)
+            print(f"Fine tuned model weights saved to: {path}")
+        
+        log_history(fine_tune_history, log_dir, f"fine_tune_history_{num}.json")
     
-    log_history(fine_tune_history, log_dir, f"fine_tune_history_{num}.json")
-    
-    return mymodel , initial_history, fine_tune_history
+    return mymodel , initial_history, fine_tune_history, log_dir

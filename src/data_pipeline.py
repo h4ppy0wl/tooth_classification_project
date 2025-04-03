@@ -1923,7 +1923,7 @@ def preprocess_and_save_images(all_records: list, config: Config, set_name: str)
         json.dump(updated_records, f)
     print(f"Preprocessing complete. Records saved to {records_file}")
     
-    return updated_records
+    return updated_records, folder_code
 
 def build_tf_dataset_from_preprocessed(records: list, config) -> tf.data.Dataset:
     """

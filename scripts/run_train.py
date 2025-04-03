@@ -21,7 +21,7 @@ from src.train import train_transfer_model
 
 def main():
     overall_start = time.time()
-    
+    run_num = 1
     # 1. Load configuration.
     t0 = time.time()
     config = Config()
@@ -43,8 +43,8 @@ def main():
     # 3. Preprocess images and save them (or load preprocessed records if already done).
     t0 = time.time()
     print("Checking for preprocessed data and processing if necessary...")
-    train_records_updated = preprocess_and_save_images(train_records, config, "train")
-    val_records_updated   = preprocess_and_save_images(val_records, config, "val")
+    train_records_updated, _ = preprocess_and_save_images(train_records, config, "train")
+    val_records_updated, _   = preprocess_and_save_images(val_records, config, "val")
     print(f"[Step 4] Preprocessed and saved images (or loaded saved records) in {time.time() - t0:.2f} seconds.")
     
     # 4. Build TensorFlow datasets from the updated (preprocessed) records.
@@ -69,7 +69,7 @@ def main():
     # 7. Train the model.
     t0 = time.time()
     print("Starting training...")
-    trained_model, h1, h2 = train_transfer_model(my_model, train_ds, val_ds, config, save_models=True)
+    trained_model, h1, h2, current_log_dir = train_transfer_model(my_model, train_ds, val_ds, config, save_models=True, num = run_num)
     print(f"[Step 8] Model training completed in {time.time() - t0:.2f} seconds.")
     
     overall_time = time.time() - overall_start
@@ -95,7 +95,7 @@ def main():
     # Preprocess test images (or load saved records if available).
     t0 = time.time()
     print("Preprocessing test images (or loading saved records)...")
-    test_records_updated = preprocess_and_save_images(test_records, config, "test")
+    test_records_updated, _ = preprocess_and_save_images(test_records, config, "test")
     print(f"[Test Step] Preprocessed test images in {time.time() - t0:.2f} seconds.")
     
     # Build the TensorFlow dataset for test images.
