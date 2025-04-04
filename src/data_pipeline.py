@@ -478,6 +478,8 @@ def resize_and_mask_background(image: np.ndarray, polygon: list, config: Config)
     resized_mask = (resized_mask > 0.5)
     # Define the gray color using a default threshold value of 128
     mask_value = config.MASK_VALUE
+    if not config.MASK_BG:
+        return resized_img
     if mask_value in range(5,50):
         float_img = resized_img.copy()
         if resized_img.max() > 2:
@@ -498,7 +500,10 @@ def resize_and_mask_background(image: np.ndarray, polygon: list, config: Config)
     else:
         # Make a copy of the original image to apply the mask
         masked_image = resized_img.copy()
-        mask_color = (mask_value, mask_value, mask_value) if image.ndim == 3 else mask_value
+        if image.dtype == np.uint8:
+            mask_color = (mask_value, mask_value, mask_value) if image.ndim == 3 else mask_value
+        if image.dtype == np.float32 and image.max() < 2:
+            mask_color = (mask_value/255.0, mask_value/255.0, mask_value/255.0) if image.ndim == 3 else mask_value/255.0
 
         # Replace pixels outside the polygon (mask value != 1) with gray
         masked_image[~resized_mask] = mask_color
@@ -976,7 +981,7 @@ def pad_and_resize(image: np.ndarray, target_dim: int, mask_value: int) -> np.nd
     return resized
 
 
-def pad_image(image: np.ndarray, target_dim: int, mask_value: int) -> np.ndarray:
+def pad_image(image: np.ndarray, target_dim: int, config: Config) -> np.ndarray:
     """
     Pads an input image to be square using constant padding.
     
@@ -1004,11 +1009,11 @@ def pad_image(image: np.ndarray, target_dim: int, mask_value: int) -> np.ndarray
     
     # Determine the constant value for padding based on image dtype.
     if image.dtype == np.uint8:
-        pad_const = mask_value  # e.g. 128
+        pad_const = config.MASK_VALUE  # e.g. 128
     elif np.issubdtype(image.dtype, np.floating) and image.max() <= 1.0:
-        pad_const = mask_value / 255.0  # e.g. 128 -> ~0.5
+        pad_const = config.MASK_VALUE / 255.0  # e.g. 128 -> ~0.5
     else:
-        pad_const = mask_value  # fallback
+        pad_const = config.MASK_VALUE  # fallback
 
     # Pad image using constant padding.
     if image.ndim == 3:
@@ -1028,6 +1033,19 @@ def pad_image(image: np.ndarray, target_dim: int, mask_value: int) -> np.ndarray
     else:
         raise ValueError("Unsupported image dimensions.")
     
+    if not config.MASK_BG:
+        # Create a blurred version of the padded image using skimage's gaussian filter.
+        blurred = skimage.filters.gaussian(padded, sigma=10, preserve_range=True)
+        
+        # Convert blurred image back to the original data type.
+        blurred = blurred.astype(image.dtype)
+
+        # Merge the unblurred original image into the blurred padded image.
+        if image.ndim == 3:
+            blurred[pad_top:pad_top+h, pad_left:pad_left+w, :] = image
+        else:
+            blurred[pad_top:pad_top+h, pad_left:pad_left+w] = image
+        return blurred
     return padded
 
 # @tf.function
@@ -1354,11 +1372,11 @@ def preprocess_record(
         img_float = dental_gray_world_white_balance(img_float)
         #output is float [0-1]
     # Mask
-    if config.MASK_BG:
-        img_float = resize_and_mask_background(image = img_float, polygon = record[1:3], config = config)
+    # if config.MASK_BG:
+    img_float = resize_and_mask_background(image = img_float, polygon = record[1:3], config = config)
     
     # Pad and resize
-    img_float = pad_image(img_float, target_dim=config.TARGET_DIM, mask_value= config.MASK_VALUE)
+    img_float = pad_image(img_float, target_dim=config.TARGET_DIM, config=config)
     
     #rescale:
     # if config.RESCALE_PIXELS[0] is not None:
