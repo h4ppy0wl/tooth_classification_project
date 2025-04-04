@@ -101,78 +101,132 @@ def main():
     # Define a list of parameter combinations for experiments.
     # Adjust these combinations as needed.
     experiment_params = [
-        {"MASK_VALUE": 0, "AUGMENT_DATA": True, "NORMALIZE_IMAGES": False,  "MASK_BG": True, "HEAD_DENSE_UNITS": 128},
-        {"MASK_VALUE": 0, "AUGMENT_DATA": True,  "NORMALIZE_IMAGES": True, "MASK_BG": False, "HEAD_DENSE_UNITS": 128},
-        {"MASK_VALUE": 0, "AUGMENT_DATA": True, "NORMALIZE_IMAGES": False,  "MASK_BG": True, "HEAD_DENSE_UNITS": 256},
-        {"MASK_VALUE": 10, "AUGMENT_DATA": True,  "NORMALIZE_IMAGES": True, "MASK_BG": False, "HEAD_DENSE_UNITS": 128},
-        {"MASK_VALUE": 10, "AUGMENT_DATA": True,  "NORMALIZE_IMAGES": True,  "MASK_BG": True, "HEAD_DENSE_UNITS": 128},
-        {"MASK_VALUE": 20, "AUGMENT_DATA": True,  "NORMALIZE_IMAGES": True,  "MASK_BG": True, "HEAD_DENSE_UNITS": 128},
-        {"MASK_VALUE": 6, "AUGMENT_DATA": True,  "NORMALIZE_IMAGES": True,  "MASK_BG": True, "HEAD_DENSE_UNITS": 128},
-        {"MASK_VALUE": 10, "AUGMENT_DATA": True, "NORMALIZE_IMAGES": False,  "MASK_BG": True, "HEAD_DENSE_UNITS": 128},
-        {"MASK_VALUE": 10, "AUGMENT_DATA": True,  "NORMALIZE_IMAGES": True, "MASK_BG": False, "HEAD_DENSE_UNITS": 128},
+        {"MASK_VALUE": 128, "AUGMENT_DATA": True, "NORMALIZE_IMAGES": True,  "MASK_BG": True, "HEAD_DENSE_UNITS": 128, "MODEL_ARCHITECTURE": "resnet50"},
+        {"MASK_VALUE": 128, "AUGMENT_DATA": True, "NORMALIZE_IMAGES": False,  "MASK_BG": True, "HEAD_DENSE_UNITS": 128, "MODEL_ARCHITECTURE": "resnet50"},
+        {"MASK_VALUE": 128, "AUGMENT_DATA": True, "NORMALIZE_IMAGES": True,  "MASK_BG": True, "HEAD_DENSE_UNITS": 256, "MODEL_ARCHITECTURE": "resnet50"},
+        {"MASK_VALUE": 0, "AUGMENT_DATA": True, "NORMALIZE_IMAGES": False,  "MASK_BG": True, "HEAD_DENSE_UNITS": 128, "MODEL_ARCHITECTURE": "resnet50"},
+        {"MASK_VALUE": 0, "AUGMENT_DATA": True,  "NORMALIZE_IMAGES": True, "MASK_BG": False, "HEAD_DENSE_UNITS": 128, "MODEL_ARCHITECTURE": "resnet50"},
+        {"MASK_VALUE": 0, "AUGMENT_DATA": True, "NORMALIZE_IMAGES": False,  "MASK_BG": True, "HEAD_DENSE_UNITS": 256, "MODEL_ARCHITECTURE": "resnet50"},
+        {"MASK_VALUE": 10, "AUGMENT_DATA": True,  "NORMALIZE_IMAGES": True, "MASK_BG": False, "HEAD_DENSE_UNITS": 128, "MODEL_ARCHITECTURE": "resnet50"},
+        {"MASK_VALUE": 10, "AUGMENT_DATA": True,  "NORMALIZE_IMAGES": True,  "MASK_BG": True, "HEAD_DENSE_UNITS": 128, "MODEL_ARCHITECTURE": "resnet50"},
+        {"MASK_VALUE": 20, "AUGMENT_DATA": True,  "NORMALIZE_IMAGES": True,  "MASK_BG": True, "HEAD_DENSE_UNITS": 128, "MODEL_ARCHITECTURE": "resnet50"},
+        {"MASK_VALUE": 6, "AUGMENT_DATA": True,  "NORMALIZE_IMAGES": True,  "MASK_BG": True, "HEAD_DENSE_UNITS": 128, "MODEL_ARCHITECTURE": "resnet50"},
+        {"MASK_VALUE": 10, "AUGMENT_DATA": True, "NORMALIZE_IMAGES": False,  "MASK_BG": True, "HEAD_DENSE_UNITS": 128, "MODEL_ARCHITECTURE": "resnet50"},
+        {"MASK_VALUE": 10, "AUGMENT_DATA": True, "NORMALIZE_IMAGES": False,  "MASK_BG": True, "HEAD_DENSE_UNITS": 256, "MODEL_ARCHITECTURE": "resnet50"},
+
+        {"MASK_VALUE": 128, "AUGMENT_DATA": True, "NORMALIZE_IMAGES": True,  "MASK_BG": True, "HEAD_DENSE_UNITS": 128, "MODEL_ARCHITECTURE": "EfficientNetV2B1"},
+        {"MASK_VALUE": 128, "AUGMENT_DATA": True, "NORMALIZE_IMAGES": False,  "MASK_BG": True, "HEAD_DENSE_UNITS": 128, "MODEL_ARCHITECTURE": "EfficientNetV2B1"},
+        {"MASK_VALUE": 128, "AUGMENT_DATA": True, "NORMALIZE_IMAGES": True,  "MASK_BG": True, "HEAD_DENSE_UNITS": 256, "MODEL_ARCHITECTURE": "EfficientNetV2B1"},
+        {"MASK_VALUE": 0, "AUGMENT_DATA": True, "NORMALIZE_IMAGES": False,  "MASK_BG": True, "HEAD_DENSE_UNITS": 128, "MODEL_ARCHITECTURE": "EfficientNetV2B1"},
+        {"MASK_VALUE": 0, "AUGMENT_DATA": True,  "NORMALIZE_IMAGES": True, "MASK_BG": False, "HEAD_DENSE_UNITS": 128, "MODEL_ARCHITECTURE": "EfficientNetV2B1"},
+        {"MASK_VALUE": 0, "AUGMENT_DATA": True, "NORMALIZE_IMAGES": False,  "MASK_BG": True, "HEAD_DENSE_UNITS": 256, "MODEL_ARCHITECTURE": "EfficientNetV2B1"},
+        {"MASK_VALUE": 10, "AUGMENT_DATA": True,  "NORMALIZE_IMAGES": True, "MASK_BG": False, "HEAD_DENSE_UNITS": 128, "MODEL_ARCHITECTURE": "EfficientNetV2B1"},
+        {"MASK_VALUE": 10, "AUGMENT_DATA": True,  "NORMALIZE_IMAGES": True,  "MASK_BG": True, "HEAD_DENSE_UNITS": 128, "MODEL_ARCHITECTURE": "EfficientNetV2B1"},
+        {"MASK_VALUE": 20, "AUGMENT_DATA": True,  "NORMALIZE_IMAGES": True,  "MASK_BG": True, "HEAD_DENSE_UNITS": 128, "MODEL_ARCHITECTURE": "EfficientNetV2B1"},
+        {"MASK_VALUE": 6, "AUGMENT_DATA": True,  "NORMALIZE_IMAGES": True,  "MASK_BG": True, "HEAD_DENSE_UNITS": 128, "MODEL_ARCHITECTURE": "EfficientNetV2B1"},
+        {"MASK_VALUE": 10, "AUGMENT_DATA": True, "NORMALIZE_IMAGES": False,  "MASK_BG": True, "HEAD_DENSE_UNITS": 128, "MODEL_ARCHITECTURE": "EfficientNetV2B1"},
+        {"MASK_VALUE": 10, "AUGMENT_DATA": True, "NORMALIZE_IMAGES": False,  "MASK_BG": True, "HEAD_DENSE_UNITS": 256, "MODEL_ARCHITECTURE": "EfficientNetV2B1"},
+
+        {"MASK_VALUE": 128, "AUGMENT_DATA": True, "NORMALIZE_IMAGES": True,  "MASK_BG": True, "HEAD_DENSE_UNITS": 128, "MODEL_ARCHITECTURE": "ConvNeXtTiny"},
+        {"MASK_VALUE": 128, "AUGMENT_DATA": True, "NORMALIZE_IMAGES": False,  "MASK_BG": True, "HEAD_DENSE_UNITS": 128, "MODEL_ARCHITECTURE": "ConvNeXtTiny"},
+        {"MASK_VALUE": 128, "AUGMENT_DATA": True, "NORMALIZE_IMAGES": True,  "MASK_BG": True, "HEAD_DENSE_UNITS": 256, "MODEL_ARCHITECTURE": "ConvNeXtTiny"},
+        {"MASK_VALUE": 0, "AUGMENT_DATA": True, "NORMALIZE_IMAGES": False,  "MASK_BG": True, "HEAD_DENSE_UNITS": 128, "MODEL_ARCHITECTURE": "ConvNeXtTiny"},
+        {"MASK_VALUE": 0, "AUGMENT_DATA": True,  "NORMALIZE_IMAGES": True, "MASK_BG": False, "HEAD_DENSE_UNITS": 128, "MODEL_ARCHITECTURE": "ConvNeXtTiny"},
+        {"MASK_VALUE": 0, "AUGMENT_DATA": True, "NORMALIZE_IMAGES": False,  "MASK_BG": True, "HEAD_DENSE_UNITS": 256, "MODEL_ARCHITECTURE": "ConvNeXtTiny"},
+        {"MASK_VALUE": 10, "AUGMENT_DATA": True,  "NORMALIZE_IMAGES": True, "MASK_BG": False, "HEAD_DENSE_UNITS": 128, "MODEL_ARCHITECTURE": "ConvNeXtTiny"},
+        {"MASK_VALUE": 10, "AUGMENT_DATA": True,  "NORMALIZE_IMAGES": True,  "MASK_BG": True, "HEAD_DENSE_UNITS": 128, "MODEL_ARCHITECTURE": "ConvNeXtTiny"},
+        {"MASK_VALUE": 20, "AUGMENT_DATA": True,  "NORMALIZE_IMAGES": True,  "MASK_BG": True, "HEAD_DENSE_UNITS": 128, "MODEL_ARCHITECTURE": "ConvNeXtTiny"},
+        {"MASK_VALUE": 6, "AUGMENT_DATA": True,  "NORMALIZE_IMAGES": True,  "MASK_BG": True, "HEAD_DENSE_UNITS": 128, "MODEL_ARCHITECTURE": "ConvNeXtTiny"},
+        {"MASK_VALUE": 10, "AUGMENT_DATA": True, "NORMALIZE_IMAGES": False,  "MASK_BG": True, "HEAD_DENSE_UNITS": 128, "MODEL_ARCHITECTURE": "ConvNeXtTiny"},
+        {"MASK_VALUE": 10, "AUGMENT_DATA": True, "NORMALIZE_IMAGES": False,  "MASK_BG": True, "HEAD_DENSE_UNITS": 256, "MODEL_ARCHITECTURE": "ConvNeXtTiny"},
+        
+        {"MASK_VALUE": 128, "AUGMENT_DATA": True, "NORMALIZE_IMAGES": True,  "MASK_BG": True, "HEAD_DENSE_UNITS": 128, "MODEL_ARCHITECTURE": "MobileNetV2"},
+        {"MASK_VALUE": 128, "AUGMENT_DATA": True, "NORMALIZE_IMAGES": False,  "MASK_BG": True, "HEAD_DENSE_UNITS": 128, "MODEL_ARCHITECTURE": "MobileNetV2"},
+        {"MASK_VALUE": 128, "AUGMENT_DATA": True, "NORMALIZE_IMAGES": True,  "MASK_BG": True, "HEAD_DENSE_UNITS": 256, "MODEL_ARCHITECTURE": "MobileNetV2"},
+        {"MASK_VALUE": 0, "AUGMENT_DATA": True, "NORMALIZE_IMAGES": False,  "MASK_BG": True, "HEAD_DENSE_UNITS": 128, "MODEL_ARCHITECTURE": "MobileNetV2"},
+        {"MASK_VALUE": 0, "AUGMENT_DATA": True,  "NORMALIZE_IMAGES": True, "MASK_BG": False, "HEAD_DENSE_UNITS": 128, "MODEL_ARCHITECTURE": "MobileNetV2"},
+        {"MASK_VALUE": 0, "AUGMENT_DATA": True, "NORMALIZE_IMAGES": False,  "MASK_BG": True, "HEAD_DENSE_UNITS": 256, "MODEL_ARCHITECTURE": "MobileNetV2"},
+        {"MASK_VALUE": 10, "AUGMENT_DATA": True,  "NORMALIZE_IMAGES": True, "MASK_BG": False, "HEAD_DENSE_UNITS": 128, "MODEL_ARCHITECTURE": "MobileNetV2"},
+        {"MASK_VALUE": 10, "AUGMENT_DATA": True,  "NORMALIZE_IMAGES": True,  "MASK_BG": True, "HEAD_DENSE_UNITS": 128, "MODEL_ARCHITECTURE": "MobileNetV2"},
+        {"MASK_VALUE": 20, "AUGMENT_DATA": True,  "NORMALIZE_IMAGES": True,  "MASK_BG": True, "HEAD_DENSE_UNITS": 128, "MODEL_ARCHITECTURE": "MobileNetV2"},
+        {"MASK_VALUE": 6, "AUGMENT_DATA": True,  "NORMALIZE_IMAGES": True,  "MASK_BG": True, "HEAD_DENSE_UNITS": 128, "MODEL_ARCHITECTURE": "MobileNetV2"},
+        {"MASK_VALUE": 10, "AUGMENT_DATA": True, "NORMALIZE_IMAGES": False,  "MASK_BG": True, "HEAD_DENSE_UNITS": 128, "MODEL_ARCHITECTURE": "MobileNetV2"},
+        {"MASK_VALUE": 10, "AUGMENT_DATA": True, "NORMALIZE_IMAGES": False,  "MASK_BG": True, "HEAD_DENSE_UNITS": 256, "MODEL_ARCHITECTURE": "MobileNetV2"},
     ]
 
-    # CSV file to collect results.
-    csv_file = Config.LOG_DIR +"/tensorboard/"+ Config.MODEL_ARCHITECTURE +"/experiment_results.csv"
-    # csv_file = "experiment_results.csv"
-    csv_fields = [
-        "experiment_id","data_folder_name","test_results","HEAD_DENSE_UNITS","MASK_VALUE","AUGMENT_DATA",
-        "NORMALIZE_IMAGES","MASK_BG","current_log_dir","train_time","eval_time","overall_time",
-        "weight_file","initial_history_file","fine_tune_history_file"
-    ]
 
-    # Open CSV file for writing.
-    with open(csv_file, mode="w", newline="") as f_csv:
-        csv_writer = csv.DictWriter(f_csv, fieldnames=csv_fields)
-        csv_writer.writeheader()
 
-        # Loop over each parameter combination.
-        exp_i = 1
-        for params in experiment_params:
-            # Create a new config instance and update it with the current parameter set.
-            config = Config()
-            for key, value in params.items():
-                setattr(config, key, value)
+    # Loop over each parameter combination.
+    exp_i = 1
+    for params in experiment_params:
+        # Create a new config instance and update it with the current parameter set.
+        config = Config()
+        for key, value in params.items():
+            setattr(config, key, value)
+        
+        log_dir_path = os.path.join(config.LOG_DIR, "tensorboard", config.MODEL_ARCHITECTURE)
+        os.makedirs(log_dir_path, exist_ok=True)
+        # CSV file to collect results.
+        csv_file = os.path.join(log_dir_path, "experiment_results.csv")
 
-            # # Capture all terminal output for this experiment.
-            # log_capture = io.StringIO()
-            # with contextlib.redirect_stdout(log_capture):
-            result = run_experiment(config, exp_num=exp_i)
-            # logs = log_capture.getvalue()
+        csv_fields = [
+            "experiment_id", "ARCHITECTURE","data_folder_name", "test_results", "HEAD_DENSE_UNITS",
+            "MASK_VALUE", "AUGMENT_DATA", "NORMALIZE_IMAGES", "MASK_BG",
+            "current_log_dir", "train_time", "eval_time", "overall_time",
+            "weight_file", "initial_history_file", "fine_tune_history_file"
+        ]
 
-            # # Save the captured logs into the current experiment log folder.
-            # experiment_log_dir = result["current_log_dir"]
-            # os.makedirs(experiment_log_dir, exist_ok=True)
-            # log_file_path = os.path.join(experiment_log_dir, "experiment_log.txt")
-            # with open(log_file_path, "w") as log_file:
-            #     log_file.write(logs)
+        # This determines if we need to write the header
+        file_exists = os.path.exists(csv_file)
 
-            # Use the last folder name (basename) of current_log_dir as experiment id.
-            experiment_id = os.path.basename(os.path.normpath(result["current_log_dir"]))
+        result = run_experiment(config, exp_num=exp_i)
 
-            # Prepare a row for the CSV file.
-            result_row = {
-                "experiment_id": experiment_id,
-                "data_folder_name": result["data_folder_name"],
-                "test_results": result["test_results"],
-                'HEAD_DENSE_UNITS': params.get("HEAD_DENSE_UNITS"),
-                "MASK_VALUE": params.get("MASK_VALUE"),
-                "AUGMENT_DATA": params.get("AUGMENT_DATA"),
-                "NORMALIZE_IMAGES": params.get("NORMALIZE_IMAGES"),
-                "MASK_BG": params.get("MASK_BG"),
-                "current_log_dir": result["current_log_dir"],
-                "train_time": result["train_time"],
-                "eval_time": result["eval_time"],
-                "overall_time": result["overall_time"],
-                "weight_file": result["weight_file"],
-                "initial_history_file": result["initial_history_file"],
-                "fine_tune_history_file": result["fine_tune_history_file"],
-            }
-            csv_writer.writerow(result_row)
-            f_csv.flush()
+        # Use the last folder name (basename) of current_log_dir as experiment id.
+        experiment_id = os.path.basename(os.path.normpath(result["current_log_dir"]))
 
-            print(f"Experiment {experiment_id} completed. Results saved.")
-            exp_i +=1
+        # Prepare a row for the CSV file.
+        result_row = {
+            "experiment_id": experiment_id,
+            "ARCHITECTURE": params.get("MODEL_ARCHITECTURE"),
+            "data_folder_name": result["data_folder_name"],
+            "test_results": result["test_results"],
+            'HEAD_DENSE_UNITS': params.get("HEAD_DENSE_UNITS"),
+            "MASK_VALUE": params.get("MASK_VALUE"),
+            "AUGMENT_DATA": params.get("AUGMENT_DATA"),
+            "NORMALIZE_IMAGES": params.get("NORMALIZE_IMAGES"),
+            "MASK_BG": params.get("MASK_BG"),
+            "current_log_dir": result["current_log_dir"],
+            "train_time": result["train_time"],
+            "eval_time": result["eval_time"],
+            "overall_time": result["overall_time"],
+            "weight_file": result["weight_file"],
+            "initial_history_file": result["initial_history_file"],
+            "fine_tune_history_file": result["fine_tune_history_file"],
+        }
+        
+            # --- Open CSV in Append Mode ---
+        try:
+            with open(csv_file, mode="a", newline="", encoding='utf-8') as f_csv:
+                csv_writer = csv.DictWriter(f_csv, fieldnames=csv_fields)
+
+                # Write the header ONLY if the file didn't exist before we opened it
+                if not file_exists:
+                    csv_writer.writeheader()
+
+                # Write the actual result row for the current experiment
+                csv_writer.writerow(result_row)
+                # f_csv.flush() # flush is often redundant when exiting 'with', but can be kept
+
+            print(f"Experiment {experiment_id} completed. Results saved to {csv_file}")
+
+        except IOError as e:
+            print(f"Error: Could not write to CSV file {csv_file}. Exception: {e}")
+        except Exception as e: # Catch other potential errors
+            print(f"An unexpected error occurred writing CSV for experiment {experiment_id}. Exception: {e}")
+
+
+        print(f"Experiment {experiment_id} completed. Results saved.")
+        exp_i +=1
 
 
 
