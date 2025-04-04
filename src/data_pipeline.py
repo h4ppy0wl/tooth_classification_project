@@ -479,8 +479,10 @@ def resize_and_mask_background(image: np.ndarray, polygon: list, config: Config)
     # Define the gray color using a default threshold value of 128
     mask_value = config.MASK_VALUE
     if mask_value in range(5,50):
-        # Convert image to float [0,1] for skimage
-        float_img = resized_img.astype(np.float32) / 255.0
+        float_img = resized_img.copy()
+        if resized_img.max() > 2:
+            # Convert image to float [0,1] for skimage
+            float_img = resized_img.astype(np.float32) / 255.0
 
         # Apply keras.filters.gaussian blur to the entire image
         # 'multichannel=True' ensures the filter is applied per channel
@@ -491,7 +493,7 @@ def resize_and_mask_background(image: np.ndarray, polygon: list, config: Config)
         out = blurred.copy()
         out[resized_mask] = float_img[resized_mask]
 
-        # Convert back to uint8 [0..255]
+        # Convert back to [0..255]
         masked_image = (out * 255.0).astype(config.IMAGE_PVALUE_TYPE)
     else:
         # Make a copy of the original image to apply the mask
@@ -1343,21 +1345,26 @@ def preprocess_record(
     if image is None:
         raise ValueError(f"Failed to read image: {img_path}")
     
+    img_float = image.copy()
+    # Convert to float for processing
+    if image.dtype == np.uint8:
+        img_float = image.astype(np.float32) / 255.0
+
     if config.NORMALIZE_IMAGES:
-        image = dental_gray_world_white_balance(image)
+        img_float = dental_gray_world_white_balance(img_float)
         #output is float [0-1]
     # Mask
     if config.MASK_BG:
-        image = resize_and_mask_background(image = image, polygon = record[1:3], config = config)
+        img_float = resize_and_mask_background(image = img_float, polygon = record[1:3], config = config)
     
     # Pad and resize
-    image = pad_image(image, target_dim=config.TARGET_DIM, mask_value= config.MASK_VALUE)
+    img_float = pad_image(img_float, target_dim=config.TARGET_DIM, mask_value= config.MASK_VALUE)
     
     #rescale:
     # if config.RESCALE_PIXELS[0] is not None:
     #     image = rescale_image(image, config)
 
-    return image, record[3], record[4]
+    return img_float, record[3], record[4]
 
 @tf.function
 def tf_preprocess_record(record1, config):
