@@ -496,7 +496,7 @@ def resize_and_mask_background(image: np.ndarray, polygon: list, config: Config)
         out[resized_mask] = float_img[resized_mask]
 
         # Convert back to [0..255]
-        masked_image = (out * 255.0).astype(config.IMAGE_PVALUE_TYPE)
+        masked_image = out.astype(config.IMAGE_PVALUE_TYPE)
     else:
         # Make a copy of the original image to apply the mask
         masked_image = resized_img.copy()
@@ -1035,7 +1035,7 @@ def pad_image(image: np.ndarray, target_dim: int, config: Config) -> np.ndarray:
     
     if not config.MASK_BG:
         # Create a blurred version of the padded image using skimage's gaussian filter.
-        blurred = skimage.filters.gaussian(padded, sigma=10, preserve_range=True)
+        blurred = skimage.filters.gaussian(padded, sigma=10, preserve_range=True, multichannel=True)
         
         # Convert blurred image back to the original data type.
         blurred = blurred.astype(image.dtype)
@@ -2004,10 +2004,10 @@ def preprocess_and_save_images(all_records: list, config: Config, set_name: str)
             processed_image, processed_label, processed_aug_flag = preprocess_record(record, config)
             new_path = os.path.join(processed_folder, base_name)
             # Convert image to uint8 if necessary.
-            if processed_image.dtype != np.uint8:
+            if processed_image.dtype != np.uint8 and processed_image.max() < 2:
                 img_to_save = (processed_image * 255).astype(np.uint8)
             else:
-                img_to_save = processed_image
+                img_to_save = processed_image.astype(np.uint8)
             imsave(new_path, img_to_save)
             processed_images[base_name] = new_path
 

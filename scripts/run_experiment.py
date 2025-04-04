@@ -30,32 +30,38 @@ def run_experiment(config, exp_num):
     overall_start = time.time()
 
     # Construct JSON paths for train, validation, and test.
+    print("###### loading jsons ")
     train_json = os.path.join(config.DATA_DIR, config.PROCESSED_DIR, config.TRAIN_JSON_NAME)
     val_json   = os.path.join(config.DATA_DIR, config.PROCESSED_DIR, config.VAL_JSON_NAME)
     test_json  = os.path.join(config.DATA_DIR, config.PROCESSED_DIR, config.TEST_JSON_NAME)
 
     # Parse records from JSON files.
+    print("###### parsing jsons ")
     train_records = parse_dataset_json(train_json, config, is_train_ds=True)
     val_records   = parse_dataset_json(val_json, config, is_train_ds=False)
     test_records  = parse_dataset_json(test_json, config, is_train_ds=False)
 
     # Preprocess images (or load preprocessed records if available).
+    print("###### Checking/preprocessing images ")
     train_records_updated, data_folder_name = preprocess_and_save_images(train_records, config, "train")
     val_records_updated, _   = preprocess_and_save_images(val_records, config, "val")
     test_records_updated, _  = preprocess_and_save_images(test_records, config, "test")
 
     # Build TensorFlow datasets.
+    print("###### building tf dataset ")
     train_ds = build_tf_dataset_from_preprocessed(train_records_updated, config)
     val_ds   = build_tf_dataset_from_preprocessed(val_records_updated, config)
     test_ds  = build_tf_dataset_from_preprocessed(test_records_updated, config)
 
     # Create the model.
+    print("###### creating the model ")
     model = create_model(config, 'transfer', trainable_base=False)
 
     # Train the model.
     start_train = time.time()
     # Here, train_transfer_model is expected to return:
     # (trained_model, initial_history, fine_tune_history, current_log_dir)
+    print("###### training the model ")
     trained_model, h1, h2, current_log_dir = train_transfer_model(model, train_ds, val_ds, config, save_models=True, num=exp_num)
     train_time = time.time() - start_train
 

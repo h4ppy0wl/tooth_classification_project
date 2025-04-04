@@ -59,7 +59,7 @@ class Config:
     
     TARGET_DIM: int = 256
     INPUT_SHAPE: tuple = (TARGET_DIM, TARGET_DIM, 3)
-    MASK_VALUE: int = 0 #if set to (5-49), the background will be blur and the value will be used for skimage.filter.gaussian sigma value
+    MASK_VALUE: int = 10 #if set to (5-49), the background will be blur and the value will be used for skimage.filter.gaussian sigma value
     ANTIALIZING_IN_RESIZING: bool = False
     
     
@@ -69,7 +69,7 @@ class Config:
     RANDOM_SEED: int = 42
     AUGMENT_DATA: bool = True
     SHUFFLE_DATASET: bool = False
-    NORMALIZE_IMAGES: bool = True
+    NORMALIZE_IMAGES: bool = False
     MASK_BG: bool = True
     REMOVE_DARK_IMAGES: bool = True
     
