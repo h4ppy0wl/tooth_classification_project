@@ -28,7 +28,7 @@ def build_pretrained_model(architecture,
     freeze: whether to freeze base model layers initially
     Returns a compiled model
     """
-    architectures = ['ResNet50', 'mobilenetv2','InceptionV3', 'EfficientNetB0', 'EfficientNetV2B0', 'EfficientNetV2B1', 'ConvNeXtTiny', 'ConvNeXtSmall', 'ConvNeXtMedium', 'ConvNeXtLarge']
+    architectures = ['ResNet50', 'MobileNetV2','InceptionV3', 'EfficientNetB0', 'EfficientNetV2B0', 'EfficientNetV2B1', 'ConvNeXtTiny', 'ConvNeXtSmall', 'ConvNeXtMedium', 'ConvNeXtLarge']
     
     if architecture.lower() == 'resnet50':
         base_model = ResNet50(weights='imagenet', include_top=False,
