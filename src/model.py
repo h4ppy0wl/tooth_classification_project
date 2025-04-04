@@ -3,7 +3,7 @@ import sys
 import os
 import tensorflow as tf
 from tensorflow.keras import layers, Model
-from tensorflow.keras.applications import ResNet50, MobileNetV2,InceptionV3, EfficientNetV2B0, EfficientNetV2B1, EfficientNetB0, ConvNeXtTiny, ConvNeXtSmall, ConvNeXtMedium, ConvNeXtLarge
+from tensorflow.keras.applications import ResNet50, MobileNetV2,InceptionV3, EfficientNetV2B0, EfficientNetV2B1, EfficientNetB0, ConvNeXtTiny, ConvNeXtSmall, ConvNeXtBase, ConvNeXtLarge
 from tensorflow.keras.applications.resnet import preprocess_input as resnet_preprocess
 from tensorflow.keras.applications.inception_v3 import preprocess_input as inception_preprocess
 from tensorflow.keras.applications.efficientnet_v2 import preprocess_input as effnet_v2_preprocess
@@ -28,7 +28,7 @@ def build_pretrained_model(architecture,
     freeze: whether to freeze base model layers initially
     Returns a compiled model
     """
-    architectures = ['ResNet50', 'MobileNetV2','InceptionV3', 'EfficientNetB0', 'EfficientNetV2B0', 'EfficientNetV2B1', 'ConvNeXtTiny', 'ConvNeXtSmall', 'ConvNeXtMedium', 'ConvNeXtLarge']
+    architectures = ['ResNet50', 'MobileNetV2','InceptionV3', 'EfficientNetB0', 'EfficientNetV2B0', 'EfficientNetV2B1', 'ConvNeXtTiny', 'ConvNeXtSmall', 'ConvNeXtBase', 'ConvNeXtLarge']
     
     if architecture.lower() == 'resnet50':
         base_model = ResNet50(weights='imagenet', include_top=False,
