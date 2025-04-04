@@ -101,9 +101,11 @@ def main():
     # Define a list of parameter combinations for experiments.
     # Adjust these combinations as needed.
     experiment_params = [
-        {"MASK_VALUE": 128, "AUGMENT_DATA": True,  "NORMALIZE_IMAGES": True,  "MASK_BG": True, "HEAD_DENSE_UNITS": 128},
-        {"MASK_VALUE": 10, "AUGMENT_DATA": True, "NORMALIZE_IMAGES": True,  "MASK_BG": True, "HEAD_DENSE_UNITS": 256},
-        {"MASK_VALUE": 0, "AUGMENT_DATA": True,  "NORMALIZE_IMAGES": False, "MASK_BG": True, "HEAD_DENSE_UNITS": 256},
+        {"MASK_VALUE": 10, "AUGMENT_DATA": True,  "NORMALIZE_IMAGES": True,  "MASK_BG": True, "HEAD_DENSE_UNITS": 128},
+        {"MASK_VALUE": 20, "AUGMENT_DATA": True,  "NORMALIZE_IMAGES": True,  "MASK_BG": True, "HEAD_DENSE_UNITS": 128},
+        {"MASK_VALUE": 6, "AUGMENT_DATA": True,  "NORMALIZE_IMAGES": True,  "MASK_BG": True, "HEAD_DENSE_UNITS": 128},
+        {"MASK_VALUE": 10, "AUGMENT_DATA": True, "NORMALIZE_IMAGES": False,  "MASK_BG": True, "HEAD_DENSE_UNITS": 128},
+        {"MASK_VALUE": 10, "AUGMENT_DATA": True,  "NORMALIZE_IMAGES": True, "MASK_BG": False, "HEAD_DENSE_UNITS": 128},
     ]
 
     # CSV file to collect results.
