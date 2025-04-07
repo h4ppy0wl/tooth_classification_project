@@ -35,7 +35,7 @@ def build_pretrained_model(architecture,
                                 input_shape=input_shape)
         preprocess_func = resnet_preprocess
         
-    if architecture.lower() == 'mobilenetv2':
+    elif architecture.lower() == 'mobilenetv2':
         base_model = MobileNetV2(weights='imagenet', include_top=False,
                                 input_shape=input_shape)
         preprocess_func = mobilenetv2_preprocess
