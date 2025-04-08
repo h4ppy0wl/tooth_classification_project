@@ -2,6 +2,7 @@
 /data/intrim
 /data/raw
 /data/processed/Pla_0_42_1_1_1_0.25_0.015
+/data/processed/v1_dark_removed
 /logs
 /models/experiments
 *.png
