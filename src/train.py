@@ -110,8 +110,8 @@ def train_transfer_model(mymodel, train_dataset, val_dataset, config: Config, sa
     # ReduceLROnPlateau here will monitor validation loss and reduce LR if no improvement
     initial_callbacks = [
         # EarlyStopping(monitor='loss', patience=3, verbose=1, restore_best_weights=True),
-        EarlyStopping(monitor='val_loss', patience=5, verbose=1, restore_best_weights=True),
-        ReduceLROnPlateau( monitor='val_loss', factor=0.5, patience=2, min_lr=1e-7, verbose=1),
+        EarlyStopping(monitor='val_auc', patience=5, verbose=1, restore_best_weights=True),
+        ReduceLROnPlateau( monitor='val_auc', factor=0.2, patience=4, min_lr=1e-7, verbose=1),
         tensorboard_callback
     ]
     
@@ -121,7 +121,7 @@ def train_transfer_model(mymodel, train_dataset, val_dataset, config: Config, sa
         loss= BinaryFocalCrossentropy(
                 apply_class_balancing=True,
                 # alpha=0.25,
-                gamma=2.0,
+                gamma= config.BFC_GAMMA,
                 from_logits=False,
                 label_smoothing=0.0,
                 reduction="sum_over_batch_size",
@@ -129,10 +129,10 @@ def train_transfer_model(mymodel, train_dataset, val_dataset, config: Config, sa
                 ),
         metrics=[
             # tf.keras.metrics.BinaryAccuracy(name='accuracy'),
-            tf.keras.metrics.Precision(name='precision'),
-            tf.keras.metrics.Recall(name='recall'),
+            tf.keras.metrics.Precision(name='precision', thresholds=config.METRIC_THRESHOLDS),
+            tf.keras.metrics.Recall(name='recall', thresholds=config.METRIC_THRESHOLDS),
             tf.keras.metrics.AUC(name='auc'),
-            tf.keras.metrics.F1Score(name='f1score', average = 'weighted')
+            tf.keras.metrics.F1Score(name='f1score', average = 'weighted', thresholds=config.METRIC_THRESHOLDS)
         ]
     )
     
@@ -186,7 +186,7 @@ def train_transfer_model(mymodel, train_dataset, val_dataset, config: Config, sa
             loss=BinaryFocalCrossentropy(
                     apply_class_balancing=True,
                     # alpha=0.25,
-                    gamma=2.0,
+                    gamma=config.BFC_GAMMA,
                     from_logits=False,
                     label_smoothing=0.0,
                     reduction="sum_over_batch_size",
@@ -194,10 +194,10 @@ def train_transfer_model(mymodel, train_dataset, val_dataset, config: Config, sa
                     ),
             metrics=[
                 # tf.keras.metrics.BinaryAccuracy(name='accuracy'),
-                tf.keras.metrics.Precision(name='precision'),
-                tf.keras.metrics.Recall(name='recall'),
+                tf.keras.metrics.Precision(name='precision', thresholds=config.METRIC_THRESHOLDS),
+                tf.keras.metrics.Recall(name='recall', thresholds=config.METRIC_THRESHOLDS),
                 tf.keras.metrics.AUC(name='auc'),
-                tf.keras.metrics.F1Score(name='f1score', average = 'weighted')
+                tf.keras.metrics.F1Score(name='f1score', average = 'weighted', thresholds=config.METRIC_THRESHOLDS)
             ]
         )
 

@@ -1,4 +1,7 @@
-/data
+/data/interim
+/data/intrim
+/data/raw
+/data/processed/Pla_0_42_1_1_1_0.25_0.015
 /logs
 /models/experiments
 *.png

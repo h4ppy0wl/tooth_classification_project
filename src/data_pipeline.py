@@ -9,7 +9,7 @@ import numpy as np
 import datetime
 import cv2
 import skimage
-from skimage import io, transform, draw, color
+from skimage import io, transform, draw, color, util, filters
 from skimage.io import imsave
 from skimage.filters import gaussian
 import tensorflow as tf
@@ -315,6 +315,65 @@ def is_darker_than_threshold(image_path: str, threshold: float):
     
     return mean_intensity < threshold
 
+def calculate_blurriness_skimage(image_path):
+    """
+    Calculates a blurriness score for an image using the variance of the Laplacian (scikit-image).
+
+    Args:
+        image_path (str): The file path to the image.
+
+    Returns:
+        float: The variance of the Laplacian. Higher values generally indicate
+               sharper images, lower values indicate blurrier images.
+               ***IMPORTANT NOTE***: The scale of this variance value will likely be
+               MUCH SMALLER than the OpenCV version because scikit-image often works
+               with images normalized to the [0, 1] float range. Thresholds will need
+               to be adjusted accordingly (e.g., try values << 1.0).
+               Returns -1.0 if the image cannot be loaded or processed.
+    """
+    try:
+        # 1. Load the image
+        image = io.imread(image_path)
+
+        # Convert image to float format [0, 1] for consistent processing
+        # Handles various input types (uint8, uint16, etc.)
+        image_float = util.img_as_float(image)
+
+        # 2. Convert to grayscale if it's a color image
+        if image_float.ndim == 3:
+            # Check for alpha channel (e.g., RGBA in PNGs)
+            if image_float.shape[-1] == 4:
+                # Convert RGBA to RGB first, then to gray
+                gray_image = color.rgb2gray(color.rgba2rgb(image_float))
+            elif image_float.shape[-1] == 3:
+                # Convert RGB to gray
+                gray_image = color.rgb2gray(image_float)
+            else:
+                print(f"Warning: Unexpected number of channels ({image_float.shape[-1]}) for {image_path}")
+                return -1.0 # Cannot handle this format
+        elif image_float.ndim == 2:
+            # It's already grayscale
+            gray_image = image_float
+        else:
+            print(f"Warning: Unexpected image dimensions {image_float.shape} for {image_path}")
+            return -1.0 # Cannot handle this format
+
+        # 3. Apply Laplacian filter
+        # skimage.filters.laplace returns a numpy array
+        laplacian_image = filters.laplace(gray_image)
+
+        # 4. Calculate variance
+        variance = np.var(laplacian_image)
+
+        return variance*1000
+
+    except FileNotFoundError:
+        print(f"Error: File not found at {image_path}")
+        return -1.0
+    except Exception as e:
+        print(f"Error processing image {image_path} with scikit-image: {e}")
+        return -1.0
+
 def remove_dark_images_from_json(json_data: dict, image_base_path: str, threshold) -> dict:
     """
     Iterates over each entry in the JSON data, and for each tooth in teeth_data,
@@ -357,6 +416,64 @@ def remove_dark_images_from_json(json_data: dict, image_base_path: str, threshol
         
     progress_bar.close()
     return filtered_data, dark_images
+
+def remove_dark_and_blur_images_from_json(json_data: dict, image_base_path: str, dark_threshold, blur_threshold) -> tuple[dict, list[str], list[str]]:
+    """
+    Iterates over each entry in the JSON data, and for each tooth in teeth_data,
+    removes those entries for which is_darker_than_threshold() returns True (i.e. tooth images considered too dark)
+    and those with a blurriness score lower than blur_threshold (if blur_threshold > 0).
+
+    If an entry's teeth_data becomes empty after filtering, the entire entry is removed.
+
+    Args:
+        json_data: Dictionary representing the JSON structure.
+        image_base_path: Base folder path where the tooth images are stored.
+        dark_threshold: Intensity threshold to compare against for darkness.
+        blur_threshold: Blurriness score threshold. If > 0, images with score lower than this are removed.
+
+    Returns:
+        Tuple containing:
+            - Filtered JSON data with dark and blur tooth images removed.
+            - List of filenames of dark images removed.
+            - List of filenames of blur images removed.
+    """
+    filtered_data = {}
+    dark_images = []
+    blur_images = []
+    progress_bar = tqdm(total=len(json_data), desc="removing dark and blur images", unit="oral cavity image")
+    for key, entry in json_data.items():
+        teeth_data = entry["teeth_data"]
+        filtered_teeth = {}
+
+        for tooth_key, tooth_entry in teeth_data.items():
+            tooth_image_filename = tooth_entry["tooth_image_filename"]
+            if not tooth_image_filename:
+                print("Missing image filename for tooth")
+                continue
+            full_image_path = os.path.join(image_base_path, tooth_image_filename)
+
+            # Check for darkness
+            if is_darker_than_threshold(full_image_path, dark_threshold):
+                dark_images.append(tooth_image_filename)
+                continue
+
+            # Check for blurriness if blur_threshold is set
+            if blur_threshold > 0:
+                blurriness_score = calculate_blurriness_skimage(full_image_path)
+                if blurriness_score != -1.0 and blurriness_score < blur_threshold:
+                    blur_images.append(tooth_image_filename)
+                    continue
+
+            filtered_teeth[tooth_key] = tooth_entry
+
+        # Only add entry if at least one tooth passed our checks
+        if len(filtered_teeth) > 0:
+            entry["teeth_data"] = filtered_teeth
+            filtered_data[key] = entry
+        progress_bar.update(1)
+
+    progress_bar.close()
+    return filtered_data, dark_images, blur_images
 
 def parse_dataset_json(json_path: str, config: Config, is_train_ds = True) -> list:
 
@@ -1475,13 +1592,13 @@ def preprocess_raw_dataset(
     
     #filtering out the dark images
     image_dir = os.path.join(config.DATA_DIR, config.IMAGE_DIR)
-    if config.REMOVE_DARK_IMAGES:
+    if config.REMOVE_DARK_IMAGES or config.BLUR_IMAGE_THRESHOLD > 0:
         if verbose:
-            print("Filtering out dark images...")
+            print("Filtering out dark and blur images based on config ...")
             
-        annotations, removed_images_list = remove_dark_images_from_json(annotations, image_dir,config.DARK_IMAGE_THRESHOLD )
+        annotations, dark_images_list, blur_images_list = remove_dark_and_blur_images_from_json(annotations, image_dir,config.DARK_IMAGE_THRESHOLD, config.BLUR_IMAGE_THRESHOLD)
         if verbose:
-            print(f"Number of removed images annotations: {len(removed_images_list)}")
+            print(f"Number of dark and blur images annotations: {len(dark_images_list)}, {len(blur_images_list)}")
         
         # Get the current datetime and format it so it's safe to use in a filename.
         current_datetime = datetime.datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
@@ -1494,10 +1611,18 @@ def preprocess_raw_dataset(
         with open(log_path, "w", encoding = "utf-8") as file:
             file.write(f"source: {json_annotations_path}\n")
             file.write(f"darkness threshold: {config.DARK_IMAGE_THRESHOLD}\n")
-            file.write(f"removed images count: {len(removed_images_list)}\n")
-            file.write("Image names:\n\n")
+            file.write(f"blurriness threshold: {config.BLUR_IMAGE_THRESHOLD}\n")
+            file.write(f"dark images count: {len(dark_images_list)}\n")
+            file.write(f"blur images count: {len(blur_images_list)}\n")
+            file.write("An image can be dark and blur!\n")
+            file.write("\nDark image names:\n\n")
             
-            for image in removed_images_list:
+            for image in dark_images_list:
+                file.write(f"{image}\n")
+                
+            file.write("\n\n\nBlur image names:\n\n")
+            
+            for image in blur_images_list:
                 file.write(f"{image}\n")
     
     #converting the raw json file to the format required for the target class
@@ -1506,7 +1631,21 @@ def preprocess_raw_dataset(
     annotations = convert_annotations(annotations, config.TARGET_CLASS)
     if verbose:
         print(f"Number of final annotations: {len(annotations)}")
+    
+    # filtering out based on the desired tooth numbers list
+    if config.TOOTH_NUMBER_LIST:
+        if verbose:
+            print(f"Filtering annotations based on TOOTH_NUMBER_LIST: {config.TOOTH_NUMBER_LIST}")
+        filtered_annotations = {}
+        for key, record in annotations.items():
+            tooth_number = record["tooth_number"]
+            if tooth_number in config.TOOTH_NUMBER_LIST:
+                filtered_annotations[key] = record
+        annotations = filtered_annotations
+        if verbose:
+            print(f"Number of annotations after tooth number filtering: {len(annotations)}")
 
+    # type setting the annotations to int32
     annotations = convert_int32_to_int(annotations)
     f_annot_path = os.path.join(output_dir,f"filtered_{config.TARGET_CLASS}_annotations.json")
     if verbose: 

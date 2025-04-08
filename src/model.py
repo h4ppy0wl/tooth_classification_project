@@ -18,17 +18,20 @@ sys.path.append(current_dir)
 from src.config import Config
 
 
-def build_pretrained_model(architecture, 
-                            input_shape: tuple[int,int,int],
+def build_pretrained_model(
                             trainable_base: bool = False,
-                            fine_tune_at: int = None,
-                            head_dense_units: int = 128):
+                            config: Config):
     """
     architecture: str, one of {'resnet50','inceptionv3','efficientnetb0', ...}
     freeze: whether to freeze base model layers initially
     Returns a compiled model
     """
     architectures = ['ResNet50', 'MobileNetV2','InceptionV3', 'EfficientNetB0', 'EfficientNetV2B0', 'EfficientNetV2B1', 'ConvNeXtTiny', 'ConvNeXtSmall', 'ConvNeXtBase', 'ConvNeXtLarge']
+    
+    architecture = config.MODEL_ARCHITECTURE
+    input_shape = config.INPUT_SHAPE
+    head_dense_units = config.HEAD_DENSE_UNITS
+    fine_tune_at = config.FINE_TUNE_FROM_LAYER
     
     if architecture.lower() == 'resnet50':
         base_model = ResNet50(weights='imagenet', include_top=False,
@@ -77,31 +80,58 @@ def build_pretrained_model(architecture,
     features = base_model(x)
 
 
-    # Add a custom classification head
-    # option 1: GlobalAveragePooling2D + Dense128 + Dropout02 + Dense
-    # x = layers.GlobalAveragePooling2D()(base_model.output)
-    # x = layers.Dense(128, activation='relu')(x)
-    # x = layers.Dropout(Config.DROPOUT_RATE)(x)
-    # output = layers.Dense(1, activation='sigmoid')(x)
+    if config.HEAD_ARCHITECTURE == "shallow":
+        
+        # Shallow Head (GAP -> Dense -> BN -> Dropout -> Output)
+        gap = layers.GlobalAveragePooling2D(name='head_gap')(features)
+        # single dense block
+        dns1 = layers.Dense(head_dense_units, activation='relu', 
+                            name='head_dense_1',
+                            kernel_regularizer=tf.keras.regularizers.l2(config.L2_REGULARIZATION))(gap)
+        bn1 = layers.BatchNormalization(name='head_bn_1')(dns1) 
+        do1 = layers.Dropout(config.DROPOUT_RATE, name='head_dropout_1')(bn1)
+        # Final classification layer connected to the output of the second block 
+        classification_output = layers.Dense(1, activation='sigmoid', 
+                                        name='classification_output')(do1)
     
-    # option 2: GlobalAveragePooling2D + BN + Dense256 + Dropout05 + Dense
-    gap = layers.GlobalAveragePooling2D()(features)
-    bn1 = layers.BatchNormalization()(gap)  # helps with feature scale
-    dns1 = layers.Dense(head_dense_units, activation='relu', kernel_regularizer=tf.keras.regularizers.l2(Config.L2_REGULARIZATION))(bn1)
-    bn2 = layers.BatchNormalization()(dns1)  # helps with feature scale
-    do1 = layers.Dropout(Config.DROPOUT_RATE)(bn2)
-    dns2 = layers.Dense(head_dense_units//2, activation='relu', kernel_regularizer=tf.keras.regularizers.l2(Config.L2_REGULARIZATION))(do1)
-    bn3 = layers.BatchNormalization()(dns2)  # helps with feature scale
-    do2 = layers.Dropout(Config.DROPOUT_RATE)(bn3)
-    dns3 = layers.Dense(head_dense_units//4, activation='relu', kernel_regularizer=tf.keras.regularizers.l2(Config.L2_REGULARIZATION))(do2)
-    do3 = layers.Dropout(Config.DROPOUT_RATE)(dns3)
-    classification_output = layers.Dense(1, activation='sigmoid', name='classification_output')(do3)
+    elif config.HEAD_ARCHITECTURE == "moderate":
     
-    # option 3: Flatten + Dense256 + Dropout05 + Dense
-    # x = layers.Flatten()(x)  # Flatten the spatial feature maps
-    # x = layers.Dense(256, activation='relu', kernel_regularizer=tf.keras.regularizers.l2(Config.L2_REGULARIZATION))(x)
-    # x = layers.Dropout(Config.DROPOUT_RATE)(x)
-    # output = layers.Dense(1, activation='sigmoid')(x)
+        # Moderately Shallow Head (Two Dense Blocks)
+        gap = layers.GlobalAveragePooling2D(name='head_gap')(features)
+        bn1 = layers.BatchNormalization(name='head_bn_initial')(gap)     
+        # First dense block
+        dns1 = layers.Dense(head_dense_units, activation='relu', 
+                            name='head_dense_1',
+                            kernel_regularizer=tf.keras.regularizers.l2(config.L2_REGULARIZATION))(bn1)
+        bn2 = layers.BatchNormalization(name='head_bn_1')(dns1)
+        do1 = layers.Dropout(config.DROPOUT_RATE, name='head_dropout_1')(bn2)
+        # Second dense block (using head_dense_units//2)
+        dns2 = layers.Dense(head_dense_units//2, activation='relu', 
+                            name='head_dense_2',
+                            kernel_regularizer=tf.keras.regularizers.l2(config.L2_REGULARIZATION))(do1)
+        bn3 = layers.BatchNormalization(name='head_bn_2')(dns2)
+        do2 = layers.Dropout(config.DROPOUT_RATE, name='head_dropout_2')(bn3) # Last dropout
+        # Final classification layer connected to the output of the second block
+        classification_output = layers.Dense(1, activation='sigmoid', 
+                                        name='classification_output')(do2)
+    
+    elif config.HEAD_ARCHITECTURE == "deep":
+        # option 2: GlobalAveragePooling2D + BN + Dense256 + Dropout05 + Dense
+        gap = layers.GlobalAveragePooling2D(name='head_gap')(features)
+        bn1 = layers.BatchNormalization(name='head_bn_initial')(gap)  # helps with feature scale
+        # First dense block
+        dns1 = layers.Dense(head_dense_units, activation='relu', name = 'head_dense_1', kernel_regularizer=tf.keras.regularizers.l2(config.L2_REGULARIZATION))(bn1)
+        bn2 = layers.BatchNormalization(name='head_bn_1')(dns1)  # helps with feature scale
+        do1 = layers.Dropout(config.DROPOUT_RATE, name='head_dropout_1')(bn2)
+        # Second dense block (using head_dense_units//2)
+        dns2 = layers.Dense(head_dense_units//2, activation='relu', name = 'head_dense_2', kernel_regularizer=tf.keras.regularizers.l2(config.L2_REGULARIZATION))(do1)
+        bn3 = layers.BatchNormalization(name='head_bn_2')(dns2)  # helps with feature scale
+        do2 = layers.Dropout(config.DROPOUT_RATE, name='head_dropout_2')(bn3)
+        # Second dense block (using head_dense_units//4)
+        dns3 = layers.Dense(head_dense_units//4, activation='relu', name = 'head_dense_3', kernel_regularizer=tf.keras.regularizers.l2(config.L2_REGULARIZATION))(do2)
+        do3 = layers.Dropout(config.DROPOUT_RATE, name='head_dropout_3')(dns3)
+        # Final classification layer connected to the output of the second block
+        classification_output = layers.Dense(1, activation='sigmoid', name='classification_output')(do3)
     
 
     model = Model(inputs=inputs, outputs=classification_output, name=f'{architecture}_model')
@@ -273,11 +303,8 @@ def create_model(
         
     elif model_type == "transfer":
         model  = build_pretrained_model(
-            architecture= config.MODEL_ARCHITECTURE,
-            input_shape= config.INPUT_SHAPE,
-            head_dense_units=config.HEAD_DENSE_UNITS,
+            config = config,
             trainable_base=kwargs.get('trainable_base', False),
-            fine_tune_at=kwargs.get('fine_tune_at', None),
             )
         
     elif model_type == "transfer_attention":
