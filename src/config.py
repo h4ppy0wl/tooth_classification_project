@@ -51,7 +51,7 @@ class Config:
     ANNOTATION_FILE: str = "data/processed"#"data/interim"
     PROCESSED_DIR: str = "data/processed"
     OUTPUT_DIR: str = "data/processed"
-    DATA_DIR: str = "C:/Users/anedaeij23/Project/tooth_classification_project"#"/home/arash/tooth_classification_project"
+    DATA_DIR: str = "/home/arash/tooth_classification_project"#"C:/Users/anedaeij23/Project/tooth_classification_project"#
     LOG_DIR: str = "logs"
     TRAIN_JSON_NAME: str = f"{TARGET_CLASS}_filtered_train.json"
     VAL_JSON_NAME: str = f"{TARGET_CLASS}_filtered_val.json"
@@ -77,8 +77,8 @@ class Config:
     BATCH_SIZE: int = 32
     RANDOM_SEED: int = 42
     AUGMENT_DATA: bool = True
-    SHUFFLE_DATASET: bool = False
-    NORMALIZE_IMAGES: bool = False
+    SHUFFLE_DATASET: bool = True
+    NORMALIZE_IMAGES: bool = True
     MASK_BG: bool = True
     REMOVE_DARK_IMAGES: bool = True
     
@@ -88,17 +88,17 @@ class Config:
     POLYGON_SMOOTHING_TOLERANCE: float = 0.015
     IMAGE_PVALUE_TYPE: np.dtype = np.float32 #np.float32
     RESCALE_PIXELS: tuple = (0, 255) #define based on model requirement. resnet 
-    OVERSAMPLE_FACTOR: int = 4 
+    OVERSAMPLE_FACTOR: int = 2 
     
     
-    MODEL_ARCHITECTURE: str = "resnet50"
+    MODEL_ARCHITECTURE: str = "custome_v1"# custome_v1, resnet50, ...
     HEAD_DENSE_UNITS: int = 128
     HEAD_ARCHITECTURE: str = "shallow"#"shallow", "moderate", "deep"
-    L2_REGULARIZATION: float = 0.0001# reduced from 0.001
+    L2_REGULARIZATION: float = 0.002# reduced from 0.001
     DROPOUT_RATE: float = 0.25# reduced from 0.3
-    INITIAL_LR: float = 1e-2
-    NUM_INITIAL_EPOCHS: int = 10
-    NUM_FINE_TUNE_EPOCHS: int = 15
+    INITIAL_LR: float = 0.001
+    NUM_INITIAL_EPOCHS: int = 100
+    NUM_FINE_TUNE_EPOCHS: int = 0
     FINE_TUNE_LR: float = 1e-3
     FINE_TUNE_FROM_LAYER: int = 81 #conv4 143#conv5
     

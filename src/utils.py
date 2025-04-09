@@ -109,13 +109,41 @@ def log_config(config, path):
         for key, value in config_dict.items():
             f.write(f"{key}: {value}\n")
 
-def convert_to_serializable(o):
-    # Convert numpy float32/float64 to Python float
-    if isinstance(o, (np.float32, np.float64)):
-        return float(o)
-    # Optionally handle numpy arrays, etc.
-    raise TypeError(f"Object of type {o.__class__.__name__} is not JSON serializable")
+# def convert_to_serializable(o):
+#     # Convert numpy float32/float64 to Python float
+#     if isinstance(o, (np.float32, np.float64)):
+#         return float(o)
+#     # Optionally handle numpy arrays, etc.
+#     raise TypeError(f"Object of type {o.__class__.__name__} is not JSON serializable")
 
+def convert_to_serializable(o):
+    """
+    Converts non-serializable types (like NumPy arrays or scalars)
+    to types that the json module can handle.
+    """
+    if isinstance(o, np.ndarray):
+        # Convert NumPy arrays to Python lists
+        return o.tolist()
+    elif isinstance(o, (np.int_, np.intc, np.intp, np.int8,
+                      np.int16, np.int32, np.int64, np.uint8,
+                      np.uint16, np.uint32, np.uint64)):
+        # Convert NumPy integers to Python integers
+        return int(o)
+    elif isinstance(o, (np.float_, np.float16, np.float32, np.float64)):
+        # Convert NumPy floats to Python floats
+        return float(o)
+    elif isinstance(o, (np.complex_, np.complex64, np.complex128)):
+        # Convert NumPy complex numbers to a serializable format (e.g., list [real, imag])
+        return [o.real, o.imag]
+    elif isinstance(o, (np.bool_)):
+        # Convert NumPy booleans to Python booleans
+        return bool(o)
+    elif isinstance(o, (np.void)):
+        # Handle NumPy void types if necessary (might need custom logic)
+        # For now, let's raise an error or return None/string representation
+        raise TypeError(f"Object of type {o.__class__.__name__} (np.void) is not handled")
+    # Keep the original error for types this function doesn't explicitly handle
+    raise TypeError(f"Object of type {o.__class__.__name__} is not JSON serializable")
 
 def log_history(history, log_dir="logs", file_name="history.txt"):
     """

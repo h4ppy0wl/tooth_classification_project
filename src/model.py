@@ -3,6 +3,9 @@ import sys
 import os
 import tensorflow as tf
 from tensorflow.keras import layers, Model
+from tensorflow.keras.layers import (
+    Input, Conv2D, BatchNormalization, Activation, MaxPooling2D,
+    Dropout)
 from tensorflow.keras.applications import ResNet50, MobileNetV2,InceptionV3, EfficientNetV2B0, EfficientNetV2B1, EfficientNetB0, ConvNeXtTiny, ConvNeXtSmall, ConvNeXtBase, ConvNeXtLarge
 from tensorflow.keras.applications.resnet import preprocess_input as resnet_preprocess
 from tensorflow.keras.applications.inception_v3 import preprocess_input as inception_preprocess
@@ -17,10 +20,90 @@ sys.path.append(parent_dir)
 sys.path.append(current_dir)
 from src.config import Config
 
+def custom_base_model_v1(input_shape, regulizer_value, dropout_value = None):
+    """
+    Builds the custom CNN base model for feature extraction.
 
-def build_pretrained_model(
+    Includes input rescaling from [0, 255] to [-1, 1].
+
+    Args:
+        input_shape (tuple): The shape of the input images (e.g., (256, 256, 3)).
+
+    Returns:
+        tf.keras.models.Model: The Keras Model object representing the base feature extractor.
+    """
+    # --- Input and Preprocessing ---
+    inputs = Input(shape=input_shape, name="input_image")
+    # Scales input from [0, 255] to [-1, 1]
+    # x = Rescaling(scale=1./127.5, offset=-1, name="rescaling")(inputs)
+
+    # --- Feature Extractor Blocks ---
+
+    # Block 1
+    # Consider parameterizing filter counts if needed: filters_b1=32
+    x = Conv2D(32, kernel_size=(3, 3), padding='same', kernel_initializer='he_normal',
+               kernel_regularizer=tf.keras.regularizers.l2(regulizer_value),
+               name="conv1_1")(inputs)
+    x = BatchNormalization(name="bn1_1")(x)
+    x = Activation('relu', name="relu1_1")(x)
+    x = MaxPooling2D(pool_size=(2, 2), name="pool1")(x)
+
+    # Block 2
+    # filters_b2=64
+    x = Conv2D(64, kernel_size=(3, 3), padding='same', kernel_initializer='he_normal',
+                kernel_regularizer=tf.keras.regularizers.l2(regulizer_value),
+                name="conv2_1")(x)
+    x = BatchNormalization(name="bn2_1")(x)
+    x = Activation('relu', name="relu2_1")(x)
+    # Optional: Add a second Conv layer
+    # x = Conv2D(64, (3, 3), padding='same', kernel_initializer='he_normal', name="conv2_2")(x)
+    # x = BatchNormalization(name="bn2_2")(x)
+    # x = Activation('relu', name="relu2_2")(x)
+    x = MaxPooling2D(pool_size=(2, 2), name="pool2")(x)
+    x = Dropout(dropout_value, name="dropout1")(x)
+
+    # Block 3
+    # filters_b3=128
+    x = Conv2D(128, kernel_size=(3, 3), padding='same', kernel_initializer='he_normal',
+               kernel_regularizer=tf.keras.regularizers.l2(regulizer_value),
+               name="conv3_1")(x)
+    x = BatchNormalization(name="bn3_1")(x)
+    x = Activation('relu', name="relu3_1")(x)
+    # Optional: Add a second Conv layer
+    # x = Conv2D(128, (3, 3), padding='same', kernel_initializer='he_normal', name="conv3_2")(x)
+    # x = BatchNormalization(name="bn3_2")(x)
+    # x = Activation('relu', name="relu3_2")(x)
+    x = MaxPooling2D(pool_size=(2, 2), name="pool3")(x)
+    x = Dropout(dropout_value, name="dropout2")(x)
+
+    # Block 4
+    # filters_b4=256
+    x = Conv2D(256, kernel_size=(3, 3), padding='same', kernel_initializer='he_normal',
+               kernel_regularizer=tf.keras.regularizers.l2(regulizer_value),
+               name="conv4_1")(x)
+    x = BatchNormalization(name="bn4_1")(x)
+    x = Activation('relu', name="relu4_1")(x)
+    # Optional: Add a second Conv layer
+    # x = Conv2D(256, (3, 3), padding='same', kernel_initializer='he_normal', name="conv4_2")(x)
+    # x = BatchNormalization(name="bn4_2")(x)
+    # x = Activation('relu', name="relu4_2")(x)
+    base_model_output = MaxPooling2D(pool_size=(2, 2), name="pool4")(x)
+    
+
+    # --- End of Base Model ---
+    # Output features before the classification head
+    # Using GlobalAveragePooling2D as the standard output for a base model
+    # You could also return the output of 'pool4' if you prefer a specific head structure
+    # base_model_output = GlobalAveragePooling2D(name="global_avg_pool")(x)
+
+    # Create the base model instance
+    base_model = Model(inputs=inputs, outputs=base_model_output, name="custom_cnn_base")
+
+    return base_model
+
+def build_pretrained_model( config: Config,
                             trainable_base: bool = False,
-                            config: Config):
+                            ):
     """
     architecture: str, one of {'resnet50','inceptionv3','efficientnetb0', ...}
     freeze: whether to freeze base model layers initially
@@ -33,7 +116,13 @@ def build_pretrained_model(
     head_dense_units = config.HEAD_DENSE_UNITS
     fine_tune_at = config.FINE_TUNE_FROM_LAYER
     
-    if architecture.lower() == 'resnet50':
+    if architecture.lower() == 'custom_v1':
+        base_model = custom_base_model_v1(input_shape=input_shape,
+                                          regulizer_value= config.L2_REGULARIZATION,
+                                          dropout_value= config.DROPOUT_RATE)
+        preprocess_func = lambda t: tf.keras.layers.Rescaling(scale=1./127.5, offset=-1)(t)
+
+    elif architecture.lower() == 'resnet50':
         base_model = ResNet50(weights='imagenet', include_top=False,
                                 input_shape=input_shape)
         preprocess_func = resnet_preprocess
@@ -58,18 +147,39 @@ def build_pretrained_model(
 
     
     
-    # We freeze the base model in the first step to prevent weight deterioration
-    if not trainable_base:
-        # Freeze entire base model for initial training
+    # # We freeze the base model in the first step to prevent weight deterioration
+    # if not (trainable_base or ("custom" in architecture)):
+    #     # Freeze entire base model for initial training
+    #     base_model.trainable = False
+    # else:
+    #     if fine_tune_at is not None:
+    #         # Freeze layers until fine_tune_at and unfreeze from that point onward
+    #         for layer in base_model.layers[:fine_tune_at]:
+    #             layer.trainable = False
+    #         for layer in base_model.layers[fine_tune_at:]:
+    #             layer.trainable = True
+    #     else:
+    #         base_model.trainable = True
+
+
+
+    if not trainable_base and not ("custom" in architecture.lower()):
+        # Freeze entire PRETRAINED base model for initial training
         base_model.trainable = False
     else:
-        if fine_tune_at is not None:
-            # Freeze layers until fine_tune_at and unfreeze from that point onward
+        # This block handles:
+        # 1. Fine-tuning PRETRAINED models (trainable_base=True)
+        # 2. Training CUSTOM model (trainable_base might be True or False, depends on use)
+        if fine_tune_at is not None and not ("custom" in architecture.lower()):
+            # Fine-tuning PRETRAINED from a specific layer
+            # Set base_model itself to trainable first to allow inner layers to be set
+            base_model.trainable = True # Important before setting individual layers!
             for layer in base_model.layers[:fine_tune_at]:
                 layer.trainable = False
             for layer in base_model.layers[fine_tune_at:]:
                 layer.trainable = True
         else:
+            # Handles CUSTOM model OR full fine-tuning of PRETRAINED model
             base_model.trainable = True
 
     # Create an Input layer and add a Lambda layer for preprocessing.

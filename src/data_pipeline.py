@@ -2161,7 +2161,7 @@ def preprocess_and_save_images(all_records: list, config: Config, set_name: str)
     
     return updated_records, folder_code
 
-def build_tf_dataset_from_preprocessed(records: list, config) -> tf.data.Dataset:
+def build_tf_dataset_from_preprocessed(records: list, config: Config) -> tf.data.Dataset:
     """
     Builds a tf.data.Dataset from preprocessed images saved on disk.
     Each record is assumed to be in the format:
@@ -2221,7 +2221,7 @@ def build_tf_dataset_from_preprocessed(records: list, config) -> tf.data.Dataset
     dataset = dataset.map(_load_image, num_parallel_calls=tf.data.AUTOTUNE)
 
     if config.SHUFFLE_DATASET:
-        dataset = dataset.shuffle(buffer_size=len(records), reshuffle_each_iteration=True)
+        dataset = dataset.shuffle(buffer_size=len(records), reshuffle_each_iteration=config.SHUFFLE_DATASET)
     dataset = dataset.batch(config.BATCH_SIZE)
     dataset = dataset.prefetch(tf.data.AUTOTUNE)
     
