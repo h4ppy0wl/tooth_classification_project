@@ -222,9 +222,16 @@ class DebugCallback(tf.keras.callbacks.Callback):
             
 class GradientDebugCallback(tf.keras.callbacks.Callback):
     def on_batch_end(self, batch, logs=None):
+        logs = logs or {}
         if batch % 100 == 0:  # Check every 100 batches
+            with tf.GradientTape() as tape:
+                x_batch = self.model.inputs[0]
+                y_batch = self.model.targets[0]
+                predictions = self.model(x_batch, training = True)
+                loss_value = self.model.compiled_loss(y_batch, predictions)
+
             weights = self.model.trainable_weights
-            grads = tf.gradients(self.model.total_loss, weights)
+            grads = tape.gradients(loss_value, weights)
             grad_norms = [tf.norm(g).numpy() if g is not None else 0 for g in grads]
             print(f"\nBatch {batch} gradient norms: {grad_norms}")
 
@@ -269,8 +276,8 @@ def setup_callbacks(config: Config, log_dir: str) -> list:
         #     save_best_only=False,
         #     verbose=1
         # ),
-        DebugCallback(),
-        GradientDebugCallback(),
+        # DebugCallback(),
+        # GradientDebugCallback(),
     ]
 
 def train_attention_model( config: Config,
@@ -362,7 +369,7 @@ def train_transfer_model(mymodel, train_dataset, val_dataset, config: Config, sa
     #     histogram_freq=0,      # Frequency (in epochs) at which to compute activation and weight histograms.
     #     write_graph=True,      # Whether to visualize the graph in TensorBoard.
     #     write_images=True      # Whether to save model weights as images.
-    )
+    # )
     
     
     
@@ -454,6 +461,7 @@ def train_transfer_model(mymodel, train_dataset, val_dataset, config: Config, sa
                 if i < fine_tune_at:
                     layer.trainable = False
                 else:
+                    print(f"layer {i} set to trainable")
                     layer.trainable = True
             print(f"Layer {fine_tune_at} and higher set to trainable in fine tuning step.")
 
