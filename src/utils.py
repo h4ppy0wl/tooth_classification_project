@@ -232,3 +232,76 @@ def set_trainable_layers(model, fine_tune_at=None):
         if base_model_found:
             layer.trainable = True
             print(f"Set head block layer {layer.name} to trainable")
+            
+            
+def set_trainable_layers_new(model, fine_tune_at=None):
+    """
+    Sets trainable layers in a model while preserving the internal structure.
+    
+    Args:
+        model: The full Keras model
+        fine_tune_at: The layer index in the base model after which layers should be trainable
+                     If None, all layers will be trainable
+    """
+    # First, make everything trainable
+    model.trainable = True
+    
+    # Find the base model after preprocessing
+    base_model = None
+    preprocessing_found = False
+    
+    for layer in model.layers:
+        if 'preprocessing' in layer.name.lower():
+            preprocessing_found = True
+            continue
+        if preprocessing_found:
+            base_model = layer
+            break
+            
+    if base_model is None:
+        print("Warning: Could not find base model after preprocessing layer")
+        return
+
+    print(f"Found base model: {base_model.name}")
+    
+    if fine_tune_at is not None:
+        # Instead of modifying individual layers, set trainable at the model level first
+        if not hasattr(base_model, 'trainable'):
+            print(f"Warning: Base model {base_model.name} does not support trainable attribute")
+            return
+            
+        base_model.trainable = True
+        
+        # Get all layers including nested ones
+        all_layers = []
+        def get_all_layers(layer):
+            if hasattr(layer, 'layers'):
+                for l in layer.layers:
+                    get_all_layers(l)
+            all_layers.append(layer)
+        
+        get_all_layers(base_model)
+        
+        # Validate fine_tune_at
+        if fine_tune_at >= len(all_layers):
+            print(f"Warning: fine_tune_at ({fine_tune_at}) is larger than total layer count ({len(all_layers)})")
+            return
+            
+        # Set trainable flags while preserving structure
+        for i, layer in enumerate(all_layers):
+            if hasattr(layer, 'trainable'):
+                layer.trainable = (i >= fine_tune_at)
+                if i >= fine_tune_at:
+                    print(f"Set layer {i} ({layer.name}) to trainable")
+                
+        print(f"Set layers {fine_tune_at} and higher in base model to trainable")
+    
+    # Make head block trainable
+    base_model_found = False
+    for layer in model.layers:
+        if layer == base_model:
+            base_model_found = True
+            continue
+        if base_model_found:
+            layer.trainable = True
+            print(f"Set head block layer {layer.name} to trainable")
