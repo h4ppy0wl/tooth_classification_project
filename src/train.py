@@ -265,19 +265,21 @@ def train_transfer_model(mymodel, train_dataset, val_dataset, config: Config, sa
     
     # Define callbacks for the initial training phase:
     # ReduceLROnPlateau here will monitor validation loss and reduce LR if no improvement
+    checkpoint_path = os.path.join(log_dir, "cp-{epoch:04d}_{val_auc:.2}.h5")
     f1_callback = F1ScoreCallback(thresholds=config.METRIC_THRESHOLDS)
     initial_callbacks = [
         # EarlyStopping(monitor='loss', patience=3, verbose=1, restore_best_weights=True),
-        EarlyStopping(monitor='val_auc', patience=6, verbose=1, restore_best_weights=True),
+        EarlyStopping(monitor='val_auc', patience=6, verbose=1, restore_best_weights=False),
         ReduceLROnPlateau( monitor='val_auc',
                            factor=0.5,
-                             patience=4,
+                             patience=3,
                                min_lr=1e-7,
                                    min_delta=1e-3,    # or smaller
                                     mode='max',
                                         verbose=1),
         tensorboard_callback,
-        f1_callback
+        f1_callback,
+        tf.keras.callbacks.ModelCheckpoint(filepath=checkpoint_path, save_weights_only=True, save_freq='epoch', save_best_only=False, verbose=1)
     ]
     
     # Phase 1: Initial training with frozen base.
