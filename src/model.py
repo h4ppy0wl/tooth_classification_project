@@ -268,6 +268,7 @@ def build_pretrained_model( config: Config,
     if not trainable_base and not ("custom" in architecture.lower()):
         # Freeze entire PRETRAINED base model for initial training
         base_model.trainable = False
+        print("###############Base model frozen")
     else:
         # This block handles:
         # 1. Fine-tuning PRETRAINED models (trainable_base=True)
@@ -280,9 +281,12 @@ def build_pretrained_model( config: Config,
                 layer.trainable = False
             for layer in base_model.layers[fine_tune_at:]:
                 layer.trainable = True
+            print(f"###############Fine-tuning from layer {fine_tune_at}")
+            print(f"###############Number of trainable layers: {sum(1 for layer in base_model.layers if layer.trainable)}")
         else:
             # Handles CUSTOM model OR full fine-tuning of PRETRAINED model
             base_model.trainable = True
+            print("############### Base model trainable")
 
     # Create an Input layer and add a Lambda layer for preprocessing.
     inputs = tf.keras.Input(shape=input_shape)

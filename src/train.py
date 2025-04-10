@@ -212,6 +212,21 @@ def compile_model(model, config: Config, learning_rate: float) -> tf.keras.Model
     )
     return model
 
+class DebugCallback(tf.keras.callbacks.Callback):
+    def on_epoch_end(self, epoch, logs=None):
+        print(f"\nEpoch {epoch} validation data sample:")
+        for x_batch, y_batch in self.model.validation_data.take(1):
+            print(f"X shape: {x_batch.shape}")
+            print(f"Y shape: {y_batch.shape}")
+            print(f"Y values: {y_batch.numpy()}")
+            
+class GradientDebugCallback(tf.keras.callbacks.Callback):
+    def on_batch_end(self, batch, logs=None):
+        if batch % 100 == 0:  # Check every 100 batches
+            weights = self.model.trainable_weights
+            grads = tf.gradients(self.model.total_loss, weights)
+            grad_norms = [tf.norm(g).numpy() if g is not None else 0 for g in grads]
+            print(f"\nBatch {batch} gradient norms: {grad_norms}")
 
 def setup_callbacks(config: Config, log_dir: str) -> list:
     """Setup callbacks for initial training phase"""
@@ -227,6 +242,7 @@ def setup_callbacks(config: Config, log_dir: str) -> list:
 
     f1_callback = F1ScoreCallback(thresholds=config.METRIC_THRESHOLDS)
     
+
     return [
         EarlyStopping(
             monitor='val_auc',
@@ -252,7 +268,9 @@ def setup_callbacks(config: Config, log_dir: str) -> list:
         #     save_freq='epoch',
         #     save_best_only=False,
         #     verbose=1
-        # )
+        # ),
+        DebugCallback(),
+        GradientDebugCallback(),
     ]
 
 def train_attention_model( config: Config,
@@ -338,12 +356,12 @@ def train_transfer_model(mymodel, train_dataset, val_dataset, config: Config, sa
     log_dir = config.LOG_DIR +"/tensorboard/"+ config.MODEL_ARCHITECTURE +"/"+ log_tail_path
     log_config(config, log_dir)
     # Instantiate the TensorBoard callback.
-    tensorboard_callback = tf.keras.callbacks.TensorBoard(
-        log_dir=log_dir,
-        update_freq='epoch',
-        histogram_freq=0,      # Frequency (in epochs) at which to compute activation and weight histograms.
-        write_graph=True,      # Whether to visualize the graph in TensorBoard.
-        write_images=True      # Whether to save model weights as images.
+    # tensorboard_callback = tf.keras.callbacks.TensorBoard(
+    #     log_dir=log_dir,
+    #     update_freq='epoch',
+    #     histogram_freq=0,      # Frequency (in epochs) at which to compute activation and weight histograms.
+    #     write_graph=True,      # Whether to visualize the graph in TensorBoard.
+    #     write_images=True      # Whether to save model weights as images.
     )
     
     
@@ -426,6 +444,8 @@ def train_transfer_model(mymodel, train_dataset, val_dataset, config: Config, sa
         # Phase 2: Fine-tuning.
         print("************ Fine-tuning model **************** ")
         print(f" **** Start fine tuning from epoch {completed_epochs +1}")
+        
+        print("Model trainable weights before fine-tuning:", len(mymodel.trainable_weights))
         # Unfreeze all layers initially.
         mymodel.trainable = True
 
@@ -441,7 +461,7 @@ def train_transfer_model(mymodel, train_dataset, val_dataset, config: Config, sa
         fine_tune_callbacks = setup_callbacks(config, log_dir)
         mymodel = compile_model(mymodel, config, config.FINE_TUNE_LR)
 
-
+        print("Model trainable weights after recompilation:", len(mymodel.trainable_weights))
 
         # # Define callbacks for the fine-tuning phase:
         # fine_tune_callbacks = [
