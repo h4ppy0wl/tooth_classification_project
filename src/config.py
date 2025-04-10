@@ -94,13 +94,13 @@ class Config:
     MODEL_ARCHITECTURE: str = "custome_v1"# custome_v1, resnet50, ...
     HEAD_DENSE_UNITS: int = 128
     HEAD_ARCHITECTURE: str = "shallow"#"shallow", "moderate", "deep"
-    L2_REGULARIZATION: float = 0.002# reduced from 0.001
-    DROPOUT_RATE: float = 0.25# reduced from 0.3
-    INITIAL_LR: float = 0.001
-    NUM_INITIAL_EPOCHS: int = 100
-    NUM_FINE_TUNE_EPOCHS: int = 0
-    FINE_TUNE_LR: float = 1e-3
-    FINE_TUNE_FROM_LAYER: int = 81 #conv4 143#conv5
+    L2_REGULARIZATION: float = 0.001# reduced from 0.001
+    DROPOUT_RATE: float = 0.2# reduced from 0.3
+    INITIAL_LR: float = 0.0008
+    NUM_INITIAL_EPOCHS: int = 15
+    NUM_FINE_TUNE_EPOCHS: int = 20
+    FINE_TUNE_LR: float = 0.0001
+    FINE_TUNE_FROM_LAYER: int = 15 #conv4 143#conv5
     
     BFC_GAMMA: float = 2.0 # BinaryFocalCrossentropy gamma
     METRIC_THRESHOLDS: list = field(default_factory=lambda:[0.5]) # Threshold for threshold dependant metrics calculation (can be a list of thresholds)

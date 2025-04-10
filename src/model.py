@@ -6,13 +6,14 @@ from tensorflow.keras import layers, Model
 from tensorflow.keras.layers import (
     Input, Conv2D, BatchNormalization, Activation, MaxPooling2D,
     Dropout)
-from tensorflow.keras.applications import ResNet50, MobileNetV2,InceptionV3, EfficientNetV2B0, EfficientNetV2B1, EfficientNetB0, ConvNeXtTiny, ConvNeXtSmall, ConvNeXtBase, ConvNeXtLarge
+from tensorflow.keras.applications import ResNet50, MobileNetV2, VGG16, InceptionV3, EfficientNetV2B0, EfficientNetV2B1, EfficientNetB0, ConvNeXtTiny, ConvNeXtSmall, ConvNeXtBase, ConvNeXtLarge
 from tensorflow.keras.applications.resnet import preprocess_input as resnet_preprocess
 from tensorflow.keras.applications.inception_v3 import preprocess_input as inception_preprocess
 from tensorflow.keras.applications.efficientnet_v2 import preprocess_input as effnet_v2_preprocess
 from tensorflow.keras.applications.efficientnet import preprocess_input as effnet_preprocess
 from tensorflow.keras.applications.convnext import preprocess_input as convnext_preprocess
 from tensorflow.keras.applications.mobilenet_v2 import preprocess_input as mobilenetv2_preprocess
+from tensorflow.keras.applications.vgg16 import preprocess_input as vgg16_preprocess
 
 parent_dir = os.path.abspath(os.path.join(os.getcwd(), os.pardir))
 current_dir = os.path.abspath(os.getcwd())
@@ -97,7 +98,99 @@ def custom_base_model_v1(input_shape, regulizer_value, dropout_value = None):
     # base_model_output = GlobalAveragePooling2D(name="global_avg_pool")(x)
 
     # Create the base model instance
-    base_model = Model(inputs=inputs, outputs=base_model_output, name="custom_cnn_base")
+    base_model = Model(inputs=inputs, outputs=base_model_output, name="custom_cnn_base_v1")
+
+    return base_model
+
+
+def custom_base_model_v2(input_shape, regulizer_value, dropout_value = None):
+    """
+    Builds the custom CNN base model for feature extraction.
+
+    Includes input rescaling from [0, 255] to [-1, 1].
+
+    Args:
+        input_shape (tuple): The shape of the input images (e.g., (256, 256, 3)).
+
+    Returns:
+        tf.keras.models.Model: The Keras Model object representing the base feature extractor.
+    """
+    # --- Input and Preprocessing ---
+    inputs = Input(shape=input_shape, name="input_image")
+    # Scales input from [0, 255] to [-1, 1]
+    # x = Rescaling(scale=1./127.5, offset=-1, name="rescaling")(inputs)
+
+    # --- Feature Extractor Blocks ---
+
+    # Block 1
+    # Consider parameterizing filter counts if needed: filters_b1=32
+    x = Conv2D(32, kernel_size=(2, 2), strides = (1,1) , padding='same', kernel_initializer='he_normal',
+               kernel_regularizer=tf.keras.regularizers.l2(regulizer_value),
+               name="conv1_1")(inputs)
+    x = BatchNormalization(name="bn1_1")(x)
+    x = Activation('relu', name="relu1_1")(x)
+    x = Conv2D(32, kernel_size=(2, 2), strides = (1,1) , padding='same', kernel_initializer='he_normal',
+               kernel_regularizer=tf.keras.regularizers.l2(regulizer_value),
+               name="conv1_2")(x)
+    x = BatchNormalization(name="bn1_2")(x)
+    x = Activation('relu', name="relu1_2")(x)
+    x = MaxPooling2D(pool_size=(2, 2), name="pool1")(x)
+    x = Dropout(0.2, name="dropout1")(x)
+
+    # Block 2
+    # filters_b2=64
+    x = Conv2D(64, kernel_size=(3, 3), padding='same', kernel_initializer='he_normal',
+                kernel_regularizer=tf.keras.regularizers.l2(regulizer_value),
+                name="conv2_1")(x)
+    x = BatchNormalization(name="bn2_1")(x)
+    x = Activation('relu', name="relu2_1")(x)
+    # Optional: Add a second Conv layer
+    x = Conv2D(64, kernel_size=(3, 3), padding='same', kernel_initializer='he_normal',
+                kernel_regularizer=tf.keras.regularizers.l2(regulizer_value),
+                name="conv2_2")(x)
+    x = BatchNormalization(name="bn2_2")(x)
+    x = Activation('relu', name="relu2_2")(x)
+    x = MaxPooling2D(pool_size=(2, 2), name="pool2")(x)
+    x = Dropout(0.35, name="dropout2")(x)
+
+    # Block 3
+    # filters_b3=128
+    x = Conv2D(128, kernel_size=(3, 3), padding='same', kernel_initializer='he_normal',
+               kernel_regularizer=tf.keras.regularizers.l2(regulizer_value),
+               name="conv3_1")(x)
+    x = BatchNormalization(name="bn3_1")(x)
+    x = Activation('relu', name="relu3_1")(x)
+    # Optional: Add a second Conv layer
+    x = Conv2D(128, kernel_size=(3, 3), padding='same', kernel_initializer='he_normal',
+               kernel_regularizer=tf.keras.regularizers.l2(regulizer_value),
+               name="conv3_2")(x)
+    x = BatchNormalization(name="bn3_2")(x)
+    base_model_output = Activation('relu', name="relu3_2")(x)
+    # base_model_output = MaxPooling2D(pool_size=(2, 2), name="pool3")(x)
+    # base_model_output = Dropout(0.4, name="dropout3")(x)
+
+    # Block 4
+    # filters_b4=256
+    # x = Conv2D(256, kernel_size=(3, 3), padding='same', kernel_initializer='he_normal',
+    #            kernel_regularizer=tf.keras.regularizers.l2(regulizer_value),
+    #            name="conv4_1")(x)
+    # x = BatchNormalization(name="bn4_1")(x)
+    # x = Activation('relu', name="relu4_1")(x)
+    # # Optional: Add a second Conv layer
+    # # x = Conv2D(256, (3, 3), padding='same', kernel_initializer='he_normal', name="conv4_2")(x)
+    # # x = BatchNormalization(name="bn4_2")(x)
+    # # x = Activation('relu', name="relu4_2")(x)
+    # base_model_output = MaxPooling2D(pool_size=(2, 2), name="pool4")(x)
+    
+
+    # --- End of Base Model ---
+    # Output features before the classification head
+    # Using GlobalAveragePooling2D as the standard output for a base model
+    # You could also return the output of 'pool4' if you prefer a specific head structure
+    # base_model_output = GlobalAveragePooling2D(name="global_avg_pool")(x)
+
+    # Create the base model instance
+    base_model = Model(inputs=inputs, outputs=base_model_output, name="custom_cnn_base_v2")
 
     return base_model
 
@@ -121,6 +214,15 @@ def build_pretrained_model( config: Config,
                                           regulizer_value= config.L2_REGULARIZATION,
                                           dropout_value= config.DROPOUT_RATE)
         preprocess_func = lambda t: tf.keras.layers.Rescaling(scale=1./127.5, offset=-1)(t)
+    elif architecture.lower() == 'custom_v2':
+        base_model = custom_base_model_v2(input_shape=input_shape,
+                                          regulizer_value= config.L2_REGULARIZATION,
+                                          dropout_value= config.DROPOUT_RATE)
+        preprocess_func = lambda t: tf.keras.layers.Rescaling(scale=1./127.5, offset=-1)(t)
+
+    elif architecture.lower() == 'vgg16':
+        base_model = VGG16(weights='imagenet', include_top=False)
+        preprocess_func = vgg16_preprocess
 
     elif architecture.lower() == 'resnet50':
         base_model = ResNet50(weights='imagenet', include_top=False,
@@ -193,16 +295,18 @@ def build_pretrained_model( config: Config,
     if config.HEAD_ARCHITECTURE == "shallow":
         
         # Shallow Head (GAP -> Dense -> BN -> Dropout -> Output)
-        gap = layers.GlobalAveragePooling2D(name='head_gap')(features)
+        x = layers.GlobalAveragePooling2D(name='head_gap')(features)
+        x = layers.BatchNormalization(name='head_bn_1')(x)
         # single dense block
-        dns1 = layers.Dense(head_dense_units, activation='relu', 
+        x = layers.Dense(head_dense_units, activation='relu', 
                             name='head_dense_1',
-                            kernel_regularizer=tf.keras.regularizers.l2(config.L2_REGULARIZATION))(gap)
-        bn1 = layers.BatchNormalization(name='head_bn_1')(dns1) 
-        do1 = layers.Dropout(config.DROPOUT_RATE, name='head_dropout_1')(bn1)
+                            kernel_regularizer=tf.keras.regularizers.l2(config.L2_REGULARIZATION))(x)
+        x = layers.BatchNormalization(name='head_bn_2')(x)
+        x = Activation('relu', name="head_relu_1")(x) 
+        x = layers.Dropout(config.DROPOUT_RATE, name='head_dropout_1')(x)
         # Final classification layer connected to the output of the second block 
         classification_output = layers.Dense(1, activation='sigmoid', 
-                                        name='classification_output')(do1)
+                                        name='classification_output')(x)
     
     elif config.HEAD_ARCHITECTURE == "moderate":
     

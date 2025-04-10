@@ -2191,8 +2191,8 @@ def build_tf_dataset_from_preprocessed(records: list, config: Config) -> tf.data
 
     # Create an augmentation layer, for example, a random rotation layer.
     random_rotation_layer = tf.keras.layers.RandomRotation(
-        factor=(-0.1, 0.1), fill_mode="nearest"
-    )
+        factor=(-0.1, 0.1), fill_mode="nearest")
+    random_zoomin_layer = tf.keras.layers.RandomZoom(height_factor = (-0.2, -0.1))
 
     def _load_image(path, poly_x, poly_y, label, aug_flag):
         # Load the preprocessed image from disk.
@@ -2205,6 +2205,7 @@ def build_tf_dataset_from_preprocessed(records: list, config: Config) -> tf.data
         def augment_fn(img):
             img = tf.image.random_flip_left_right(img)
             img = random_rotation_layer(img)
+            img = random_zoomin_layer(img)
             return img
 
         final_image = tf.cond(aug_flag, lambda: augment_fn(image), lambda: image)

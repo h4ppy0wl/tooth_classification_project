@@ -185,7 +185,7 @@ def compile_model(model, config: Config, learning_rate: float) -> tf.keras.Model
         The compiled model
     """
     model.compile(
-        optimizer=Adam(learning_rate=learning_rate),
+        optimizer=Adam(learning_rate=learning_rate, clipnorm = 1.0),
         loss=BinaryFocalCrossentropy(
             apply_class_balancing=True,
             gamma=config.BFC_GAMMA,
@@ -224,33 +224,35 @@ def setup_callbacks(config: Config, log_dir: str) -> list:
     )
     
     checkpoint_path = os.path.join(log_dir, "cp-{epoch:04d}_{val_auc:.2}.h5")
+
     f1_callback = F1ScoreCallback(thresholds=config.METRIC_THRESHOLDS)
     
     return [
         EarlyStopping(
             monitor='val_auc',
             patience=6,
+            min_delta = 0.01,
             verbose=1,
-            restore_best_weights=False
+            restore_best_weights=True
         ),
         ReduceLROnPlateau(
             monitor='val_auc',
             factor=0.5,
             patience=3,
             min_lr=1e-7,
-            min_delta=1e-3,
+            min_delta=0.001,
             mode='max',
             verbose=1
         ),
         tensorboard_callback,
         f1_callback,
-        tf.keras.callbacks.ModelCheckpoint(
-            filepath=checkpoint_path,
-            save_weights_only=True,
-            save_freq='epoch',
-            save_best_only=False,
-            verbose=1
-        )
+        # tf.keras.callbacks.ModelCheckpoint(
+        #     filepath=checkpoint_path,
+        #     save_weights_only=True,
+        #     save_freq='epoch',
+        #     save_best_only=False,
+        #     verbose=1
+        # )
     ]
 
 def train_attention_model( config: Config,
@@ -411,7 +413,7 @@ def train_transfer_model(mymodel, train_dataset, val_dataset, config: Config, sa
         callbacks=initial_callbacks,
         verbose = 1,
     )
-    
+    completed_epochs = len(initial_history.history['loss'])
     log_history(initial_history, log_dir, f"initial_training_history_{num}.json")
     # Save weights after initial training.
     if config.NUM_FINE_TUNE_EPOCHS == 0:
@@ -423,6 +425,7 @@ def train_transfer_model(mymodel, train_dataset, val_dataset, config: Config, sa
     else:
         # Phase 2: Fine-tuning.
         print("************ Fine-tuning model **************** ")
+        print(f" **** Start fine tuning from epoch {completed_epochs +1}")
         # Unfreeze all layers initially.
         mymodel.trainable = True
 
@@ -435,8 +438,8 @@ def train_transfer_model(mymodel, train_dataset, val_dataset, config: Config, sa
             print(f"Layer {fine_tune_at} and higher set to trainable in fine tuning step.")
 
 
-    fine_tune_callbacks = setup_callbacks(config, log_dir)
-    mymodel = compile_model(mymodel, config, config.FINE_TUNE_LR)
+        fine_tune_callbacks = setup_callbacks(config, log_dir)
+        mymodel = compile_model(mymodel, config, config.FINE_TUNE_LR)
 
 
 
@@ -480,7 +483,8 @@ def train_transfer_model(mymodel, train_dataset, val_dataset, config: Config, sa
         fine_tune_history = mymodel.fit(
             train_dataset,
             validation_data=val_dataset,
-            epochs=fine_tune_epochs,
+            initial_epoch= completed_epochs,
+            epochs= completed_epochs + fine_tune_epochs,
             callbacks=fine_tune_callbacks,
             verbose = 1
         )
