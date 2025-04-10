@@ -169,6 +169,7 @@ def log_history(history, log_dir="logs", file_name="history.txt"):
 def set_trainable_layers(model, fine_tune_at=None):
     """
     Sets trainable layers in a model with a base model and head block.
+    Handles cases where the base model might be nested within functional layers.
     
     Args:
         model: The full Keras model
@@ -178,34 +179,47 @@ def set_trainable_layers(model, fine_tune_at=None):
     # First, make everything trainable
     model.trainable = True
     
-    # Find the preprocessing layer and base model
+    # Find the base model after preprocessing
     base_model = None
-    for layer in model.layers:
-        # Skip preprocessing layer
-        if 'preprocessing' in layer.name.lower():
-            continue
-        # The next layer should be our base model
-        base_model = layer
-        break
+    preprocessing_found = False
     
+    for layer in model.layers:
+        if 'preprocessing' in layer.name.lower():
+            preprocessing_found = True
+            continue
+        if preprocessing_found:
+            base_model = layer
+            break
+            
     if base_model is None:
         print("Warning: Could not find base model after preprocessing layer")
         return
-        
+
     print(f"Found base model: {base_model.name}")
     
+    # Check if base_model is a Model or Layer with sublayers
+    if hasattr(base_model, 'layers'):
+        base_layers = base_model.layers
+    elif hasattr(base_model, 'layer'):  # Some wrapped layers have .layer attribute
+        base_layers = base_model.layer.layers if hasattr(base_model.layer, 'layers') else [base_model.layer]
+    else:
+        print(f"Warning: Base model {base_model.name} has no accessible layers")
+        return
+        
     if fine_tune_at is not None:
-        # Make sure fine_tune_at is valid
-        if fine_tune_at >= len(base_model.layers):
-            print(f"Warning: fine_tune_at ({fine_tune_at}) is larger than base model layer count ({len(base_model.layers)})")
+        # Validate fine_tune_at
+        num_layers = len(base_layers)
+        if fine_tune_at >= num_layers:
+            print(f"Warning: fine_tune_at ({fine_tune_at}) is larger than base model layer count ({num_layers})")
             return
             
-        # Freeze layers in base model up to fine_tune_at
-        for i, layer in enumerate(base_model.layers):
+        # Set trainable flags in base model
+        for i, layer in enumerate(base_layers):
             if i < fine_tune_at:
                 layer.trainable = False
             else:
                 layer.trainable = True
+                print(f"Set layer {i} ({layer.name}) to trainable")
                 
         print(f"Set layers {fine_tune_at} and higher in base model to trainable")
         
@@ -217,5 +231,4 @@ def set_trainable_layers(model, fine_tune_at=None):
             continue
         if base_model_found:
             layer.trainable = True
-            
-    print("Set all head block layers to trainable")
+            print(f"Set head block layer {layer.name} to trainable")
