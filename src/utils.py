@@ -164,3 +164,58 @@ def log_history(history, log_dir="logs", file_name="history.txt"):
     # Write the history to a file as JSON.
     with open(file_path, "w") as f:
         json.dump(history_dict, f, indent=4, default=convert_to_serializable)
+        
+        
+def set_trainable_layers(model, fine_tune_at=None):
+    """
+    Sets trainable layers in a model with a base model and head block.
+    
+    Args:
+        model: The full Keras model
+        fine_tune_at: The layer index in the base model after which layers should be trainable
+                     If None, all layers will be trainable
+    """
+    # First, make everything trainable
+    model.trainable = True
+    
+    # Find the preprocessing layer and base model
+    base_model = None
+    for layer in model.layers:
+        # Skip preprocessing layer
+        if 'preprocessing' in layer.name.lower():
+            continue
+        # The next layer should be our base model
+        base_model = layer
+        break
+    
+    if base_model is None:
+        print("Warning: Could not find base model after preprocessing layer")
+        return
+        
+    print(f"Found base model: {base_model.name}")
+    
+    if fine_tune_at is not None:
+        # Make sure fine_tune_at is valid
+        if fine_tune_at >= len(base_model.layers):
+            print(f"Warning: fine_tune_at ({fine_tune_at}) is larger than base model layer count ({len(base_model.layers)})")
+            return
+            
+        # Freeze layers in base model up to fine_tune_at
+        for i, layer in enumerate(base_model.layers):
+            if i < fine_tune_at:
+                layer.trainable = False
+            else:
+                layer.trainable = True
+                
+        print(f"Set layers {fine_tune_at} and higher in base model to trainable")
+        
+    # Ensure all layers after base model (head block) are trainable
+    base_model_found = False
+    for layer in model.layers:
+        if layer == base_model:
+            base_model_found = True
+            continue
+        if base_model_found:
+            layer.trainable = True
+            
+    print("Set all head block layers to trainable")

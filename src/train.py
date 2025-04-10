@@ -11,7 +11,7 @@ sys.path.append(parent_dir)
 sys.path.append(current_dir)
 from src import model as model_lib
 from src.config import Config
-from src.utils import log_config, log_history
+from src.utils import log_config, log_history, set_trainable_layers
 import numpy as np
 
 class F1ScoreCallback(tf.keras.callbacks.Callback):
@@ -454,17 +454,18 @@ def train_transfer_model(mymodel, train_dataset, val_dataset, config: Config, sa
         
         print("Model trainable weights before fine-tuning:", len(mymodel.trainable_weights))
         # Unfreeze all layers initially.
-        mymodel.trainable = True
+        # mymodel.trainable = True
 
+        # if fine_tune_at is not None:
+        #     for i, layer in enumerate(mymodel.layers):
+        #         if i < fine_tune_at:
+        #             layer.trainable = False
+        #         else:
+        #             print(f"layer {i} set to trainable")
+        #             layer.trainable = True
+        #     print(f"Layer {fine_tune_at} and higher set to trainable in fine tuning step.")
         if fine_tune_at is not None:
-            for i, layer in enumerate(mymodel.layers):
-                if i < fine_tune_at:
-                    layer.trainable = False
-                else:
-                    print(f"layer {i} set to trainable")
-                    layer.trainable = True
-            print(f"Layer {fine_tune_at} and higher set to trainable in fine tuning step.")
-
+            set_trainable_layers(mymodel, fine_tune_at)
 
         fine_tune_callbacks = setup_callbacks(config, log_dir)
         mymodel = compile_model(mymodel, config, config.FINE_TUNE_LR)
