@@ -3,9 +3,9 @@ import sys
 import os
 import tensorflow as tf
 from tensorflow.keras import layers, Model
-from tensorflow.keras.layers import (
-    Input, Conv2D, BatchNormalization, Activation, MaxPooling2D,
-    Dropout)
+from tensorflow.keras.layers import ( Input, Conv2D, BatchNormalization,
+                                        Activation, MaxPooling2D, Dropout,
+                                        Concatenate)
 from tensorflow.keras.applications import ResNet50, MobileNetV2, VGG16, InceptionV3, EfficientNetV2B0, EfficientNetV2B1, EfficientNetB0, ConvNeXtTiny, ConvNeXtSmall, ConvNeXtBase, ConvNeXtLarge
 from tensorflow.keras.applications.resnet import preprocess_input as resnet_preprocess
 from tensorflow.keras.applications.inception_v3 import preprocess_input as inception_preprocess
@@ -281,12 +281,12 @@ def build_pretrained_model( config: Config,
                 layer.trainable = False
             for layer in base_model.layers[fine_tune_at:]:
                 layer.trainable = True
-            print(f"###############Fine-tuning from layer {fine_tune_at}")
-            print(f"###############Number of trainable layers: {sum(1 for layer in base_model.layers if layer.trainable)}")
+            print(f"###############  Fine-tuning from layer {fine_tune_at}")
+            print(f"###############  Number of trainable layers: {sum(1 for layer in base_model.layers if layer.trainable)}")
         else:
             # Handles CUSTOM model OR full fine-tuning of PRETRAINED model
             base_model.trainable = True
-            print("############### Base model trainable")
+            print("###############  Base model trainable")
 
     # Create an Input layer and add a Lambda layer for preprocessing.
     inputs = tf.keras.Input(shape=input_shape)
@@ -311,7 +311,40 @@ def build_pretrained_model( config: Config,
         # Final classification layer connected to the output of the second block 
         classification_output = layers.Dense(1, activation='sigmoid', 
                                         name='classification_output')(x)
-    
+
+    if config.HEAD_ARCHITECTURE == "shallow_gmp":
+        
+        # Shallow Head (GMP -> Dense -> BN -> Dropout -> Output)
+        x = layers.GlobalMaxPooling2D(name='head_gmp')(features)
+        x = layers.BatchNormalization(name='head_bn_1')(x)
+        # single dense block
+        x = layers.Dense(head_dense_units, activation='relu', 
+                            name='head_dense_1',
+                            kernel_regularizer=tf.keras.regularizers.l2(config.L2_REGULARIZATION))(x)
+        x = layers.BatchNormalization(name='head_bn_2')(x)
+        x = Activation('relu', name="head_relu_1")(x) 
+        x = layers.Dropout(config.DROPOUT_RATE, name='head_dropout_1')(x)
+        # Final classification layer connected to the output of the second block 
+        classification_output = layers.Dense(1, activation='sigmoid', 
+                                        name='classification_output')(x)
+    elif config.HEAD_ARCHITECTURE == "shallow_combo":
+        
+        # Shallow Head (GAP+GMP -> Dense -> BN -> Dropout -> Output)
+        gap = layers.GlobalAveragePooling2D(name='head_gap')(features)
+        gmp = layers.GlobalMaxPooling2D(name='head_gmp')(features)
+        concatenated_features = Concatenate()[gap, gmp]
+        x = layers.BatchNormalization(name='head_bn_1')(x)
+        # single dense block
+        x = layers.Dense(head_dense_units, activation='relu', 
+                            name='head_dense_1',
+                            kernel_regularizer=tf.keras.regularizers.l2(config.L2_REGULARIZATION))(x)
+        x = layers.BatchNormalization(name='head_bn_2')(x)
+        x = Activation('relu', name="head_relu_1")(x) 
+        x = layers.Dropout(config.DROPOUT_RATE, name='head_dropout_1')(x)
+        # Final classification layer connected to the output of the second block 
+        classification_output = layers.Dense(1, activation='sigmoid', 
+                                        name='classification_output')(x)
+
     elif config.HEAD_ARCHITECTURE == "moderate":
     
         # Moderately Shallow Head (Two Dense Blocks)
