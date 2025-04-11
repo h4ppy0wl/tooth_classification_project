@@ -96,10 +96,10 @@ class Config:
     HEAD_ARCHITECTURE: str = "shallow"#"shallow", "moderate", "deep"
     L2_REGULARIZATION: float = 0.01# reduced from 0.001
     DROPOUT_RATE: float = 0.25# reduced from 0.3
-    INITIAL_LR: float = 0.05
-    NUM_INITIAL_EPOCHS: int = 2
-    NUM_FINE_TUNE_EPOCHS: int = 2
-    FINE_TUNE_LR: float = 0.001
+    INITIAL_LR: float = 0.005
+    NUM_INITIAL_EPOCHS: int = 30
+    NUM_FINE_TUNE_EPOCHS: int = 0
+    FINE_TUNE_LR: float = 0.0001
     FINE_TUNE_FROM_LAYER: int = 15 #conv4 143#conv5
     
     BFC_GAMMA: float = 2.0 # BinaryFocalCrossentropy gamma

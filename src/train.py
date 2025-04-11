@@ -431,6 +431,8 @@ def train_transfer_model(mymodel, train_dataset, val_dataset, config: Config, sa
     # )
     
     print("**************** Starting initial training **************** ")
+    trainable_param_count = np.sum([tf.keras.backend.count_params(w) for w in mymodel.trainable_weights])
+    print("trainable params in initial model:", trainable_param_count)
     initial_history = mymodel.fit(
         train_dataset,
         validation_data=val_dataset,
@@ -438,6 +440,8 @@ def train_transfer_model(mymodel, train_dataset, val_dataset, config: Config, sa
         callbacks=initial_callbacks,
         verbose = 1,
     )
+
+    initial_history.history['trainable_params'] = trainable_param_count
     completed_epochs = len(initial_history.history['loss'])
     log_history(initial_history, log_dir, f"initial_training_history_{num}.json")
     # Save weights after initial training.
@@ -464,13 +468,14 @@ def train_transfer_model(mymodel, train_dataset, val_dataset, config: Config, sa
         #             print(f"layer {i} set to trainable")
         #             layer.trainable = True
         #     print(f"Layer {fine_tune_at} and higher set to trainable in fine tuning step.")
-        if fine_tune_at is not None:
-            set_trainable_layers_new(mymodel, fine_tune_at)
+        if fine_tune_at > 0:
+            mymodel = set_trainable_layers_new(mymodel, fine_tune_at)
 
         fine_tune_callbacks = setup_callbacks(config, log_dir)
         mymodel = compile_model(mymodel, config, config.FINE_TUNE_LR)
-
-        print("Model trainable weights after recompilation:", len(mymodel.trainable_weights))
+        trainable_param_count = np.sum([tf.keras.backend.count_params(w) for w in mymodel.trainable_weights])
+        print("trainable params in fine tuning model:", trainable_param_count)
+        # print("Model trainable weights after recompilation:", len(mymodel.trainable_weights))
 
         # # Define callbacks for the fine-tuning phase:
         # fine_tune_callbacks = [
@@ -518,12 +523,14 @@ def train_transfer_model(mymodel, train_dataset, val_dataset, config: Config, sa
             verbose = 1
         )
 
+        fine_tune_history.history['trainable_params'] = trainable_param_count
         # Save weights after fine-tuning.
+        mymodel.trainable = False
         if save_models:
             path = os.path.join(log_dir,f"{fine_tuned_weights_name}_{num}_.h5")
             mymodel.save_weights(path)
             print(f"Fine tuned model weights saved to: {path}")
-        
+        # fine_tune_history = initial_history # for test
         log_history(fine_tune_history, log_dir, f"fine_tune_history_{num}.json")
     
     return mymodel , initial_history, fine_tune_history, log_dir

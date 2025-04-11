@@ -166,7 +166,7 @@ def log_history(history, log_dir="logs", file_name="history.txt"):
         json.dump(history_dict, f, indent=4, default=convert_to_serializable)
         
         
-def set_trainable_layers(model, fine_tune_at=None):
+def set_trainable_layers(model: tf.keras, fine_tune_at=None):
     """
     Sets trainable layers in a model with a base model and head block.
     Handles cases where the base model might be nested within functional layers.
@@ -178,7 +178,7 @@ def set_trainable_layers(model, fine_tune_at=None):
     """
     # First, make everything trainable
     model.trainable = True
-    
+    model.layers
     # Find the base model after preprocessing
     base_model = None
     preprocessing_found = False
@@ -234,7 +234,7 @@ def set_trainable_layers(model, fine_tune_at=None):
             print(f"Set head block layer {layer.name} to trainable")
             
             
-def set_trainable_layers_new(model, fine_tune_at=None):
+def set_trainable_layers_new(model: tf.keras.Model, fine_tune_at=None):
     """
     Sets trainable layers in a model while preserving the internal structure.
     
@@ -245,63 +245,12 @@ def set_trainable_layers_new(model, fine_tune_at=None):
     """
     # First, make everything trainable
     model.trainable = True
-    
+    print(f"base model is supposed to be at model.layers[2]. Found layer name is : {model.layers[2].name}. is it correct?!")
+    model.layers[2].trainable = True # to make sure!
     # Find the base model after preprocessing
-    base_model = None
-    preprocessing_found = False
-    
-    for layer in model.layers:
-        if 'preprocessing' in layer.name.lower():
-            preprocessing_found = True
-            continue
-        if preprocessing_found:
-            base_model = layer
-            break
-            
-    if base_model is None:
-        print("Warning: Could not find base model after preprocessing layer")
-        return
+    for layer in model.layers[2].layers[:fine_tune_at]:
+        layer.trainable = False
+        print(f"{layer.name} layer in '{model.layers[2].name}' freezed.")
 
-    print(f"Found base model: {base_model.name}")
-    
-    if fine_tune_at is not None:
-        # Instead of modifying individual layers, set trainable at the model level first
-        if not hasattr(base_model, 'trainable'):
-            print(f"Warning: Base model {base_model.name} does not support trainable attribute")
-            return
-            
-        base_model.trainable = True
-        
-        # Get all layers including nested ones
-        all_layers = []
-        def get_all_layers(layer):
-            if hasattr(layer, 'layers'):
-                for l in layer.layers:
-                    get_all_layers(l)
-            all_layers.append(layer)
-        
-        get_all_layers(base_model)
-        
-        # Validate fine_tune_at
-        if fine_tune_at >= len(all_layers):
-            print(f"Warning: fine_tune_at ({fine_tune_at}) is larger than total layer count ({len(all_layers)})")
-            return
-            
-        # Set trainable flags while preserving structure
-        for i, layer in enumerate(all_layers):
-            if hasattr(layer, 'trainable'):
-                layer.trainable = (i >= fine_tune_at)
-                if i >= fine_tune_at:
-                    print(f"Set layer {i} ({layer.name}) to trainable")
-                
-        print(f"Set layers {fine_tune_at} and higher in base model to trainable")
-    
-    # Make head block trainable
-    base_model_found = False
-    for layer in model.layers:
-        if layer == base_model:
-            base_model_found = True
-            continue
-        if base_model_found:
-            layer.trainable = True
-            print(f"Set head block layer {layer.name} to trainable")
+    print(f"####### Set layers {fine_tune_at} and higher in base model '{model.layers[2].name}', and the head to trainable")
+    return model

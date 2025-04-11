@@ -107,7 +107,12 @@ def main():
     # Define a list of parameter combinations for experiments.
     # Adjust these combinations as needed.
     experiment_params = [
-        {"MASK_VALUE": 128, "AUGMENT_DATA": True, "NORMALIZE_IMAGES": True,  "MASK_BG": True, "HEAD_DENSE_UNITS": 128, "MODEL_ARCHITECTURE": 'vgg16', 'FINE_TUNE_FROM_LAYER': 15, 'HEAD_ARCHITECTURE': "shallow"}
+        # {"MASK_VALUE": 128, "AUGMENT_DATA": True, "NORMALIZE_IMAGES": True,  "MASK_BG": True, "HEAD_DENSE_UNITS": 64, "MODEL_ARCHITECTURE": 'vgg16', 'FINE_TUNE_FROM_LAYER': 15, 'HEAD_ARCHITECTURE': "shallow"},
+        # {"MASK_VALUE": 128, "AUGMENT_DATA": True, "NORMALIZE_IMAGES": True,  "MASK_BG": True, "HEAD_DENSE_UNITS": 128, "MODEL_ARCHITECTURE": 'vgg16', 'FINE_TUNE_FROM_LAYER': 15, 'HEAD_ARCHITECTURE': "shallow"},
+        # {"MASK_VALUE": 128, "AUGMENT_DATA": True, "NORMALIZE_IMAGES": True,  "MASK_BG": True, "HEAD_DENSE_UNITS": 128, "MODEL_ARCHITECTURE": 'vgg16', 'FINE_TUNE_FROM_LAYER': 15, 'HEAD_ARCHITECTURE': "moderate"},
+        {"MASK_VALUE": 128, "AUGMENT_DATA": True, "NORMALIZE_IMAGES": True,  "MASK_BG": True, "HEAD_DENSE_UNITS": 256, "MODEL_ARCHITECTURE": 'vgg16', 'FINE_TUNE_FROM_LAYER': 15, 'HEAD_ARCHITECTURE': "moderate"},
+
+
         # {"MASK_VALUE": 128, "AUGMENT_DATA": True, "NORMALIZE_IMAGES": True,  "MASK_BG": True, "HEAD_DENSE_UNITS": 128, "MODEL_ARCHITECTURE": 'custom_v1', 'FINE_TUNE_FROM_LAYER': 143, 'HEAD_ARCHITECTURE': "shallow"},
         # {"MASK_VALUE": 128, "AUGMENT_DATA": True, "NORMALIZE_IMAGES": True,  "MASK_BG": True, "HEAD_DENSE_UNITS": 128, "MODEL_ARCHITECTURE": 'custom_v1', 'FINE_TUNE_FROM_LAYER': 81, 'HEAD_ARCHITECTURE': "shallow"},
         # {"MASK_VALUE": 128, "AUGMENT_DATA": True, "NORMALIZE_IMAGES": True,  "MASK_BG": True, "HEAD_DENSE_UNITS": 128, "MODEL_ARCHITECTURE": 'custom_v2', 'FINE_TUNE_FROM_LAYER': 143, 'HEAD_ARCHITECTURE': "shallow"}#"moderate"},
