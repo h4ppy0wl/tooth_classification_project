@@ -77,6 +77,7 @@ class Config:
     BATCH_SIZE: int = 32
     RANDOM_SEED: int = 42
     AUGMENT_DATA: bool = True
+    NON_AUG_AUG_PERCENT: float = 0.3
     SHUFFLE_DATASET: bool = True
     NORMALIZE_IMAGES: bool = True
     MASK_BG: bool = True
@@ -94,9 +95,9 @@ class Config:
     MODEL_ARCHITECTURE: str = "vgg16"# custome_v1, resnet50, ...
     HEAD_DENSE_UNITS: int = 128
     HEAD_ARCHITECTURE: str = "shallow"#"shallow", "moderate", "deep"
-    L2_REGULARIZATION: float = 0.01# reduced from 0.001
-    DROPOUT_RATE: float = 0.25# reduced from 0.3
-    INITIAL_LR: float = 0.005
+    L2_REGULARIZATION: float = 0.1# reduced from 0.001
+    DROPOUT_RATE: float = 0.35# reduced from 0.3
+    INITIAL_LR: float = 0.01
     NUM_INITIAL_EPOCHS: int = 30
     NUM_FINE_TUNE_EPOCHS: int = 0
     FINE_TUNE_LR: float = 0.0001

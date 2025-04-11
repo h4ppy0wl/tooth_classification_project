@@ -2208,7 +2208,14 @@ def build_tf_dataset_from_preprocessed(records: list, config: Config) -> tf.data
             img = random_zoomin_layer(img)
             return img
 
-        final_image = tf.cond(aug_flag, lambda: augment_fn(image), lambda: image)
+        def random_aug_decision():
+            rand = tf.random.uniform([], 0, 1)
+            return tf.less(rand, tf.constant(config.NON_AUG_AUG_PERCENT))
+
+        final_image = tf.cond(aug_flag, lambda: augment_fn(image),
+                              lambda: tf.cond( config.AUGMENT_DATA,
+                              lambda: tf.cond(random_aug_decision, lambda: augment_fn(image),lambda: image),
+                              lambda: image))
         
         # Convert label: if it matches TARGET_CLASS, output 1; else 0.
         final_label = tf.cond(

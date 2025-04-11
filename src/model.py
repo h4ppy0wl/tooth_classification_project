@@ -332,15 +332,15 @@ def build_pretrained_model( config: Config,
         # Shallow Head (GAP+GMP -> Dense -> BN -> Dropout -> Output)
         gap = layers.GlobalAveragePooling2D(name='head_gap')(features)
         gmp = layers.GlobalMaxPooling2D(name='head_gmp')(features)
-        concatenated_features = Concatenate()[gap, gmp]
-        x = layers.BatchNormalization(name='head_bn_1')(x)
+        concatenated_features = Concatenate()([gap, gmp])
+        x = layers.BatchNormalization(name='head_bn_1')(concatenated_features)
         # single dense block
         x = layers.Dense(head_dense_units, activation='relu', 
                             name='head_dense_1',
                             kernel_regularizer=tf.keras.regularizers.l2(config.L2_REGULARIZATION))(x)
         x = layers.BatchNormalization(name='head_bn_2')(x)
         x = Activation('relu', name="head_relu_1")(x) 
-        x = layers.Dropout(config.DROPOUT_RATE, name='head_dropout_1')(x)
+        # x = layers.Dropout(config.DROPOUT_RATE, name='head_dropout_1')(x)
         # Final classification layer connected to the output of the second block 
         classification_output = layers.Dense(1, activation='sigmoid', 
                                         name='classification_output')(x)
@@ -371,47 +371,76 @@ def build_pretrained_model( config: Config,
         classification_output = layers.Dense(1, activation='sigmoid', 
                                         name='classification_output')(x)
 
-
-
-
-
-    
-        # # Moderately Shallow Head (Two Dense Blocks)
-        # gap = layers.GlobalAveragePooling2D(name='head_gap')(features)
-        # bn1 = layers.BatchNormalization(name='head_bn_initial')(gap)     
-        # # First dense block
-        # dns1 = layers.Dense(head_dense_units, activation='relu', 
-        #                     name='head_dense_1',
-        #                     kernel_regularizer=tf.keras.regularizers.l2(config.L2_REGULARIZATION))(bn1)
-        # bn2 = layers.BatchNormalization(name='head_bn_1')(dns1)
-        # do1 = layers.Dropout(config.DROPOUT_RATE, name='head_dropout_1')(bn2)
-        # # Second dense block (using head_dense_units//2)
-        # dns2 = layers.Dense(head_dense_units//2, activation='relu', 
-        #                     name='head_dense_2',
-        #                     kernel_regularizer=tf.keras.regularizers.l2(config.L2_REGULARIZATION))(do1)
-        # bn3 = layers.BatchNormalization(name='head_bn_2')(dns2)
-        # do2 = layers.Dropout(config.DROPOUT_RATE, name='head_dropout_2')(bn3) # Last dropout
-        # # Final classification layer connected to the output of the second block
-        # classification_output = layers.Dense(1, activation='sigmoid', 
-        #                                 name='classification_output')(do2)
     
     elif config.HEAD_ARCHITECTURE == "deep":
+
+        # option 2: GlobalAveragePooling2D + BN + Dense256 + Dropout05 + Dense
+        x = layers.GlobalAveragePooling2D(name='head_gap')(features)
+        x = layers.BatchNormalization(name='head_bn_initial')(x)  # helps with feature scale
+        
+        # 1st dense block
+        x = layers.Dense(head_dense_units, activation='relu', 
+                            name='head_dense_1',
+                            kernel_regularizer=tf.keras.regularizers.l2(config.L2_REGULARIZATION))(x)
+        x = layers.BatchNormalization(name='head_bn_2')(x)
+        x = Activation('relu', name="head_relu_1")(x) 
+        x = layers.Dropout(config.DROPOUT_RATE, name='head_dropout_1')(x)
+
+        # 2nd dense block
+        x = layers.Dense(head_dense_units//2, activation='relu', 
+                            name='head_dense_2',
+                            kernel_regularizer=tf.keras.regularizers.l2(config.L2_REGULARIZATION))(x)
+        x = layers.BatchNormalization(name='head_bn_3')(x)
+        x = Activation('relu', name="head_relu_2")(x)
+        x = layers.Dropout(config.DROPOUT_RATE + 0.1, name='head_dropout_2')(x)
+
+        # 3rd dense block
+        x = layers.Dense(head_dense_units//4, activation='relu', 
+                            name='head_dense_3',
+                            kernel_regularizer=tf.keras.regularizers.l2(config.L2_REGULARIZATION))(x)
+        x = layers.BatchNormalization(name='head_bn_4')(x)
+        x = Activation('relu', name="head_relu_3")(x) 
+
+
+        # Final classification layer connected to the output of the second block 
+        classification_output = layers.Dense(1, activation='sigmoid', 
+                                        name='classification_output')(x)
+        
+    elif config.HEAD_ARCHITECTURE == "deep_combo":
+        
         # option 2: GlobalAveragePooling2D + BN + Dense256 + Dropout05 + Dense
         gap = layers.GlobalAveragePooling2D(name='head_gap')(features)
-        bn1 = layers.BatchNormalization(name='head_bn_initial')(gap)  # helps with feature scale
-        # First dense block
-        dns1 = layers.Dense(head_dense_units, activation='relu', name = 'head_dense_1', kernel_regularizer=tf.keras.regularizers.l2(config.L2_REGULARIZATION))(bn1)
-        bn2 = layers.BatchNormalization(name='head_bn_1')(dns1)  # helps with feature scale
-        do1 = layers.Dropout(config.DROPOUT_RATE, name='head_dropout_1')(bn2)
-        # Second dense block (using head_dense_units//2)
-        dns2 = layers.Dense(head_dense_units//2, activation='relu', name = 'head_dense_2', kernel_regularizer=tf.keras.regularizers.l2(config.L2_REGULARIZATION))(do1)
-        bn3 = layers.BatchNormalization(name='head_bn_2')(dns2)  # helps with feature scale
-        do2 = layers.Dropout(config.DROPOUT_RATE, name='head_dropout_2')(bn3)
-        # Second dense block (using head_dense_units//4)
-        dns3 = layers.Dense(head_dense_units//4, activation='relu', name = 'head_dense_3', kernel_regularizer=tf.keras.regularizers.l2(config.L2_REGULARIZATION))(do2)
-        do3 = layers.Dropout(config.DROPOUT_RATE, name='head_dropout_3')(dns3)
-        # Final classification layer connected to the output of the second block
-        classification_output = layers.Dense(1, activation='sigmoid', name='classification_output')(do3)
+        gmp = layers.GlobalMaxPooling2D(name='head_gmp')(features)
+        concatenated_features = Concatenate()([gap, gmp])
+        x = layers.BatchNormalization(name='head_bn_1')(concatenated_features)
+        
+        # 1st dense block
+        x = layers.Dense(head_dense_units, activation='relu', 
+                            name='head_dense_1',
+                            kernel_regularizer=tf.keras.regularizers.l2(config.L2_REGULARIZATION))(x)
+        x = layers.BatchNormalization(name='head_bn_2')(x)
+        x = Activation('relu', name="head_relu_1")(x) 
+        x = layers.Dropout(config.DROPOUT_RATE, name='head_dropout_1')(x)
+
+        # 2nd dense block
+        x = layers.Dense(head_dense_units//2, activation='relu', 
+                            name='head_dense_2',
+                            kernel_regularizer=tf.keras.regularizers.l2(config.L2_REGULARIZATION))(x)
+        x = layers.BatchNormalization(name='head_bn_3')(x)
+        x = Activation('relu', name="head_relu_2")(x)
+        x = layers.Dropout(config.DROPOUT_RATE + 0.1, name='head_dropout_2')(x)
+
+        # 3rd dense block
+        x = layers.Dense(head_dense_units//4, activation='relu', 
+                            name='head_dense_3',
+                            kernel_regularizer=tf.keras.regularizers.l2(config.L2_REGULARIZATION))(x)
+        x = layers.BatchNormalization(name='head_bn_4')(x)
+        x = Activation('relu', name="head_relu_3")(x) 
+
+
+        # Final classification layer connected to the output of the second block 
+        classification_output = layers.Dense(1, activation='sigmoid', 
+                                        name='classification_output')(x)
     
 
     model = Model(inputs=inputs, outputs=classification_output, name=f'{architecture}_model')
