@@ -2161,7 +2161,7 @@ def preprocess_and_save_images(all_records: list, config: Config, set_name: str)
     
     return updated_records, folder_code
 
-def build_tf_dataset_from_preprocessed(records: list, config: Config) -> tf.data.Dataset:
+def build_tf_dataset_from_preprocessed(records: list, config: Config, is_training: bool = False) -> tf.data.Dataset:
     """
     Builds a tf.data.Dataset from preprocessed images saved on disk.
     Each record is assumed to be in the format:
@@ -2210,12 +2210,18 @@ def build_tf_dataset_from_preprocessed(records: list, config: Config) -> tf.data
 
         def random_aug_decision():
             rand = tf.random.uniform([], 0, 1)
-            return tf.less(rand, tf.constant(config.NON_AUG_AUG_PERCENT))
+            threshold = tf.constant(config.NON_AUG_AUG_PERCENT, dtype=tf.float32)
+            return tf.less(rand, threshold) # Returns tf.bool tensor
 
-        final_image = tf.cond(aug_flag, lambda: augment_fn(image),
-                              lambda: tf.cond( config.AUGMENT_DATA,
-                              lambda: tf.cond(random_aug_decision, lambda: augment_fn(image),lambda: image),
-                              lambda: image))
+        final_image = tf.cond(tf.constant(is_training, dtype=tf.bool), lambda: tf.cond(aug_flag, lambda: augment_fn(image),
+                              lambda: tf.cond( tf.constant(config.AUGMENT_DATA, dtype=tf.bool),
+                              lambda: tf.cond(random_aug_decision(), lambda: augment_fn(image),lambda: image),
+                              lambda: image)), lambda: image)
+
+        # final_image = tf.cond(aug_flag, lambda: augment_fn(image),
+        #                       lambda: tf.cond( tf.constant(config.AUGMENT_DATA, dtype=tf.bool),
+        #                       lambda: tf.cond(random_aug_decision(), lambda: augment_fn(image),lambda: image),
+        #                       lambda: image))
         
         # Convert label: if it matches TARGET_CLASS, output 1; else 0.
         final_label = tf.cond(

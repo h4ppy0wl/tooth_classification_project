@@ -221,13 +221,49 @@ def build_pretrained_model( config: Config,
         preprocess_func = lambda t: tf.keras.layers.Rescaling(scale=1./127.5, offset=-1)(t)
 
     elif architecture.lower() == 'vgg16':
-        base_model = VGG16(weights='imagenet', include_top=False)
         preprocess_func = vgg16_preprocess
+        if not config.TAP_INTO_BASE_MODEL:
+            base_model = VGG16(weights='imagenet', include_top=False, input_shape=input_shape)
+
+        else:
+            # 1. Load the full VGG16 base model
+            # IMPORTANT: Pass input_shape here to define the input tensor
+            vgg_full_base = VGG16(weights='imagenet', include_top=False, input_shape=input_shape)
+
+            output_layer_name = 'block3_pool' # Define this for each model
+
+            # 3. Get the output tensor of that layer
+            intermediate_output = vgg_full_base.get_layer(output_layer_name).output
+
+            base_model = Model(inputs=vgg_full_base.input,
+                            outputs=intermediate_output,
+                            name='vgg16_block3_output')
 
     elif architecture.lower() == 'resnet50':
         base_model = ResNet50(weights='imagenet', include_top=False,
                                 input_shape=input_shape)
         preprocess_func = resnet_preprocess
+    
+    elif architecture.lower() == 'inceptionv3':
+        preprocess_func = inception_preprocess
+        if not config.TAP_INTO_BASE_MODEL:
+            base_model = InceptionV3(weights='imagenet', include_top=False, input_shape=input_shape)
+
+        else:
+            # 1. Load the full VGG16 base model
+            # IMPORTANT: Pass input_shape here to define the input tensor
+            inception_full_base = InceptionV3(weights='imagenet', include_top=False, input_shape=input_shape)
+
+            # 'mixed7' is the typical end of the 14x14 blocks (verify with full summary)
+            output_layer_name = 'mixed7'    
+
+            # 3. Get the output tensor of that layer
+            intermediate_output = inception_full_base.get_layer(output_layer_name).output
+
+            base_model = Model(inputs=inception_full_base.input,
+                            outputs=intermediate_output,
+                            name='inceptionv3_mixed7_output')
+            print(f"Successfully obtained output from layer: {output_layer_name}")
         
     elif architecture.lower() == 'mobilenetv2':
         base_model = MobileNetV2(weights='imagenet', include_top=False,
