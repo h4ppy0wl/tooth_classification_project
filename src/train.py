@@ -184,16 +184,42 @@ def compile_model(model, config: Config, learning_rate: float) -> tf.keras.Model
     Returns:
         The compiled model
     """
+    #Setting the optimizer
+    if config.OPTIMIZER.lower() == 'sgd':
+        optimizer = tf.keras.optimizers.SGD(learning_rate=learning_rate, momentum= config.MOMENTUM)
+    
+    elif config.OPTIMIZER.lower() == 'rmsprop':
+        optimizer = tf.keras.optimizers.RMSprop(learning_rate=learning_rate, momentum= config.MOMENTUM)
+    
+    elif config.OPTIMIZER.lower() == 'adam':
+        optimizer = tf.keras.optimizers.Adam(learning_rate=learning_rate)#, clipnorm = 1.0)
+
+    elif config.OPTIMIZER.lower() == 'adamw':
+        optimizer = tf.keras.optimizers.AdamW(learning_rate=learning_rate)
+
+    elif config.OPTIMIZER.lower() == 'adagrad':
+        optimizer = tf.keras.optimizers.Adamgrad(learning_rate=learning_rate)
+
+    #Setting the loss functionwhat are my choices regarding loa
+    if config.LOSS_FUNC.lower() == 'binaryfocalcrossentropy':
+        loss_func = tf.keras.losses.BinaryFocalCrossentropy(apply_class_balancing=True,
+                                                            gamma=config.BFC_GAMMA,
+                                                            from_logits=False, 
+                                                            label_smoothing=0.0,
+                                                            reduction="sum_over_batch_size",
+                                                            name="binary_focal_crossentropy",
+                                                            )
+    
+    elif config.LOSS_FUNC.lower() == 'binarycrossentropy':
+        loss_func = tf.keras.losses.BinaryCrossentropy( from_logits=False, 
+                                                        label_smoothing=0.0,
+                                                        reduction="auto",
+                                                        name="binary_crossentropy",
+                                                        )
+
     model.compile(
-        optimizer=Adam(learning_rate=learning_rate, clipnorm = 1.0),
-        loss=BinaryFocalCrossentropy(
-            apply_class_balancing=True,
-            gamma=config.BFC_GAMMA,
-            from_logits=False, 
-            label_smoothing=0.0,
-            reduction="sum_over_batch_size",
-            name="binary_focal_crossentropy"
-        ),
+        optimizer= optimizer,
+        loss= loss_func,
         metrics=[
             tf.keras.metrics.Precision(
                 name=f'precision_at_{config.METRIC_THRESHOLDS[0]}', 
@@ -357,6 +383,7 @@ def train_transfer_model(mymodel, train_dataset, val_dataset, config: Config, sa
     initial_lr=config.INITIAL_LR
     fine_tune_lr=config.FINE_TUNE_LR
     fine_tune_at=config.FINE_TUNE_FROM_LAYER
+    c_weights = config.CLASS_WEIGHTS
 
     # Create a log directory with a timestamp.
     log_tail_path = datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
@@ -378,7 +405,7 @@ def train_transfer_model(mymodel, train_dataset, val_dataset, config: Config, sa
     initial_callbacks = setup_callbacks(config, log_dir)
     
     # Phase 1: Initial training with frozen base
-    mymodel = compile_model(mymodel, config, config.INITIAL_LR)
+    mymodel = compile_model(mymodel, config, initial_lr)
     
     
     
@@ -437,6 +464,7 @@ def train_transfer_model(mymodel, train_dataset, val_dataset, config: Config, sa
         train_dataset,
         validation_data=val_dataset,
         epochs=i_epochs,
+        class_weight= c_weights,
         callbacks=initial_callbacks,
         verbose = 1,
     )
@@ -472,7 +500,7 @@ def train_transfer_model(mymodel, train_dataset, val_dataset, config: Config, sa
             mymodel = set_trainable_layers_new(mymodel, fine_tune_at)
 
         fine_tune_callbacks = setup_callbacks(config, log_dir)
-        mymodel = compile_model(mymodel, config, config.FINE_TUNE_LR)
+        mymodel = compile_model(mymodel, config, fine_tune_lr)
         trainable_param_count = np.sum([tf.keras.backend.count_params(w) for w in mymodel.trainable_weights])
         print("trainable params in fine tuning model:", trainable_param_count)
         # print("Model trainable weights after recompilation:", len(mymodel.trainable_weights))
@@ -519,6 +547,7 @@ def train_transfer_model(mymodel, train_dataset, val_dataset, config: Config, sa
             validation_data=val_dataset,
             initial_epoch= completed_epochs,
             epochs= completed_epochs + fine_tune_epochs,
+            class_weight= c_weights,
             callbacks=fine_tune_callbacks,
             verbose = 1
         )
