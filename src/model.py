@@ -348,7 +348,7 @@ def build_pretrained_model( config: Config,
         classification_output = layers.Dense(1, activation='sigmoid', 
                                         name='classification_output')(x)
 
-    if config.HEAD_ARCHITECTURE == "shallow_gmp":
+    elif config.HEAD_ARCHITECTURE == "shallow_gmp":
         
         # Shallow Head (GMP -> Dense -> BN -> Dropout -> Output)
         x = layers.GlobalMaxPooling2D(name='head_gmp')(features)
@@ -406,7 +406,32 @@ def build_pretrained_model( config: Config,
         # Final classification layer connected to the output of the second block 
         classification_output = layers.Dense(1, activation='sigmoid', 
                                         name='classification_output')(x)
+    elif config.HEAD_ARCHITECTURE == "moderate_combo":
 
+        gap = layers.GlobalAveragePooling2D(name='head_gap')(features)
+        gmp = layers.GlobalMaxPooling2D(name='head_gmp')(features)
+        concatenated_features = Concatenate()([gap, gmp])
+        x = layers.BatchNormalization(name='head_bn_1')(concatenated_features)
+        
+        # 1st dense block
+        x = layers.Dense(head_dense_units, activation='relu', 
+                            name='head_dense_1',
+                            kernel_regularizer=tf.keras.regularizers.l2(config.L2_REGULARIZATION))(x)
+        x = layers.BatchNormalization(name='head_bn_2')(x)
+        x = Activation('relu', name="head_relu_1")(x) 
+        x = layers.Dropout(config.DROPOUT_RATE, name='head_dropout_1')(x)
+
+        # 2nd dense block
+        x = layers.Dense(head_dense_units//2, activation='relu', 
+                            name='head_dense_2',
+                            kernel_regularizer=tf.keras.regularizers.l2(config.L2_REGULARIZATION))(x)
+        x = layers.BatchNormalization(name='head_bn_3')(x)
+        x = Activation('relu', name="head_relu_2")(x) 
+
+
+        # Final classification layer connected to the output of the second block 
+        classification_output = layers.Dense(1, activation='sigmoid', 
+                                        name='classification_output')(x)
     
     elif config.HEAD_ARCHITECTURE == "deep":
 
