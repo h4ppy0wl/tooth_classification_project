@@ -76,14 +76,14 @@ class TransferLearningTuner(kt.HyperModel):
         
         return model
 
-    def fit(self, hp, model, *args, **kwargs):
+    def fit(self, hp, model, epochs = None, *args, **kwargs):
         # Initial training phase
         # the model is pre-compiled in the build method
         # so we can directly use it here
         initial_history = model.fit(
             self.train_ds,
             validation_data=self.val_ds,
-            epochs=self.config.NUM_INITIAL_EPOCHS,
+            epochs=epochs,#self.config.NUM_INITIAL_EPOCHS,
             class_weight= self.config.CLASS_WEIGHTS,
             callbacks=[
                         # EarlyStopping(
@@ -96,7 +96,7 @@ class TransferLearningTuner(kt.HyperModel):
                         ReduceLROnPlateau(
                             monitor='val_auc',
                             factor=0.5,
-                            patience=4,
+                            patience=3,
                             min_lr=1e-7,
                             min_delta=0.001,
                             mode='max',
@@ -107,7 +107,7 @@ class TransferLearningTuner(kt.HyperModel):
             verbose=1
         )
         
-        # Fine-tuning phase
+        # Fine-tuning phase_ with current config this will not run
         if self.config.FINE_TUNE_FROM_LAYER > 0:
             mymodel = set_trainable_layers_new(mymodel, self.config.FINE_TUNE_FROM_LAYER)       
                 
@@ -166,6 +166,7 @@ def run_hyperparameter_tuning(config: Config, train_ds, val_ds, result_path = ".
     tuner = kt.Hyperband(
         TransferLearningTuner(config, train_ds, val_ds),
         objective='val_auc',
+        mode = 'max',
         max_epochs=config.NUM_INITIAL_EPOCHS + config.NUM_FINE_TUNE_EPOCHS,
         factor=3,
         directory= result_path,

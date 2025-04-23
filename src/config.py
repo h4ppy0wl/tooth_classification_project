@@ -102,7 +102,7 @@ class Config:
     NUM_INITIAL_EPOCHS: int = 2
     NUM_FINE_TUNE_EPOCHS: int = 0
     FINE_TUNE_LR: float = 0.001
-    FINE_TUNE_FROM_LAYER: int = 2 #conv4 143#conv5
+    FINE_TUNE_FROM_LAYER: int = 0 #conv4 143#conv5
     
     OPTIMIZER: str = 'SGD' # 'Adam', 'SGD', 'RMSprop'
     MOMENTUM: float = 0.85 #applicable if SGD or RMSprop is selected
@@ -353,12 +353,12 @@ class Config:
         'sampling': 'log',
         'type': 'float'
     },
-    'fine_tune_lr': {
-        'min_value': 1e-5,
-        'max_value': 1e-3,
-        'sampling': 'log',
-        'type': 'float'
-    },
+    # 'fine_tune_lr': {
+    #     'min_value': 1e-5,
+    #     'max_value': 1e-3,
+    #     'sampling': 'log',
+    #     'type': 'float'
+    # },
     'class_weight_neg': {  # weight for class 0
         'min_value': 0.2,
         'max_value': 1.0,
