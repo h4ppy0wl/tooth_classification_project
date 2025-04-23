@@ -68,7 +68,7 @@ class Config:
     
     TARGET_DIM: int = 256
     INPUT_SHAPE: tuple = (TARGET_DIM, TARGET_DIM, 3)
-    MASK_VALUE: int = 10 #if set to (5-49), the background will be blur and the value will be used for skimage.filter.gaussian sigma value
+    MASK_VALUE: int = 20 #if set to (5-49), the background will be blur and the value will be used for skimage.filter.gaussian sigma value
     ANTIALIZING_IN_RESIZING: bool = False
     
     
@@ -92,17 +92,17 @@ class Config:
     OVERSAMPLE_FACTOR: int = 2 
     
     
-    MODEL_ARCHITECTURE: str = "vgg16"# custome_v1, resnet50, ...
+    MODEL_ARCHITECTURE: str = "resnet50"# custome_v1, resnet50, ...
     TAP_INTO_BASE_MODEL: str = False
-    HEAD_DENSE_UNITS: int = 128
-    HEAD_ARCHITECTURE: str = "shallow"#"shallow", "moderate", "deep"
+    HEAD_DENSE_UNITS: int = 256
+    HEAD_ARCHITECTURE: str = "moderate_combo"#"shallow", "moderate", "deep"
     L2_REGULARIZATION: float = 0.003# reduced from 0.001
     DROPOUT_RATE: float = 0.25# reduced from 0.3
     INITIAL_LR: float = 0.04
-    NUM_INITIAL_EPOCHS: int = 35
+    NUM_INITIAL_EPOCHS: int = 2
     NUM_FINE_TUNE_EPOCHS: int = 0
     FINE_TUNE_LR: float = 0.001
-    FINE_TUNE_FROM_LAYER: int = 15 #conv4 143#conv5
+    FINE_TUNE_FROM_LAYER: int = 2 #conv4 143#conv5
     
     OPTIMIZER: str = 'SGD' # 'Adam', 'SGD', 'RMSprop'
     MOMENTUM: float = 0.85 #applicable if SGD or RMSprop is selected
@@ -330,9 +330,9 @@ class Config:
     
     HP_SPACE = {
     'head_dense_units': {
-        'min_value': 64,
+        'min_value': 128,
         'max_value': 512,
-        'step': 64,
+        'step': 128,
         'type': 'int'
     },
     'dropout_rate': {
@@ -342,14 +342,14 @@ class Config:
         'type': 'float'
     },
     'l2_regularization': {
-        'min_value': 1e-6,
-        'max_value': 1e-3,
+        'min_value': 1e-4,
+        'max_value': 1e-1,
         'sampling': 'log',
         'type': 'float'
     },
     'initial_lr': {
-        'min_value': 1e-4,
-        'max_value': 1e-2,
+        'min_value': 1e-3,
+        'max_value': 1e-1,
         'sampling': 'log',
         'type': 'float'
     },

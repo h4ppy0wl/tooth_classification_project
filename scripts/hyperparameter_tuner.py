@@ -1,5 +1,6 @@
 import keras_tuner as kt
 import tensorflow as tf
+from tensorflow.keras.callbacks import EarlyStopping, ReduceLROnPlateau
 import sys
 import os
 import argparse
@@ -13,7 +14,7 @@ sys.path.append(current_dir)
 
 from src.config import Config
 from src.model import create_model
-from src.train import compile_model, setup_callbacks
+from src.train import compile_model, setup_callbacks, F1ScoreCallback
 from src.utils import set_trainable_layers_new
 
 from src.data_pipeline import (
@@ -84,7 +85,26 @@ class TransferLearningTuner(kt.HyperModel):
             validation_data=self.val_ds,
             epochs=self.config.NUM_INITIAL_EPOCHS,
             class_weight= self.config.CLASS_WEIGHTS,
-            callbacks=setup_callbacks(self.config, kwargs.get('log_dir', 'logs'))
+            callbacks=[
+                        # EarlyStopping(
+                        #     monitor='val_auc',
+                        #     patience=7,
+                        #     min_delta = 0.005,
+                        #     verbose=1,
+                        #     restore_best_weights=True
+                        # ),
+                        ReduceLROnPlateau(
+                            monitor='val_auc',
+                            factor=0.5,
+                            patience=4,
+                            min_lr=1e-7,
+                            min_delta=0.001,
+                            mode='max',
+                            verbose=1
+                        ),
+                        F1ScoreCallback(thresholds=self.config.METRIC_THRESHOLDS),
+                    ],
+            verbose=1
         )
         
         # Fine-tuning phase
@@ -99,7 +119,26 @@ class TransferLearningTuner(kt.HyperModel):
                 validation_data=self.val_ds,
                 epochs=self.config.NUM_FINE_TUNE_EPOCHS,
                 class_weight= self.config.CLASS_WEIGHTS,
-                callbacks=setup_callbacks(self.config, kwargs.get('log_dir', 'logs'))
+                callbacks=[
+                        # EarlyStopping(
+                        #     monitor='val_auc',
+                        #     patience=7,
+                        #     min_delta = 0.005,
+                        #     verbose=1,
+                        #     restore_best_weights=True
+                        # ),
+                        ReduceLROnPlateau(
+                            monitor='val_auc',
+                            factor=0.5,
+                            patience=4,
+                            min_lr=1e-7,
+                            min_delta=0.001,
+                            mode='max',
+                            verbose=1
+                        ),
+                        F1ScoreCallback(thresholds=self.config.METRIC_THRESHOLDS),
+                    ],
+                verbose=1
             )
             
             # Return the best validation AUC from either training phase
@@ -129,7 +168,7 @@ def run_hyperparameter_tuning(config: Config, train_ds, val_ds, result_path = ".
         objective='val_auc',
         max_epochs=config.NUM_INITIAL_EPOCHS + config.NUM_FINE_TUNE_EPOCHS,
         factor=3,
-        directory='hyperparameter_tuning',
+        directory= result_path,
         project_name=f'{config.MODEL_ARCHITECTURE}_{dataset_code}_tuning'
     )
     
