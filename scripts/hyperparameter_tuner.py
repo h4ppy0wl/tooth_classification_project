@@ -88,15 +88,15 @@ class TransferLearningTuner(kt.HyperModel):
         # the model is pre-compiled in the build method
         # so we can directly use it here
         callbacks.append([
-                        ReduceLROnPlateau(
-                            monitor='val_pr_auc',
-                            factor=0.5,
-                            patience=4,
-                            min_lr=1e-7,
-                            min_delta=0.001,
-                            mode='max',
-                            verbose=1
-                        ),
+                        # ReduceLROnPlateau(
+                        #     monitor='val_pr_auc',
+                        #     factor=0.5,
+                        #     patience=4,
+                        #     min_lr=1e-7,
+                        #     min_delta=0.001,
+                        #     mode='max',
+                        #     verbose=1
+                        # ),
                         F1ScoreCallback(thresholds=self.config.METRIC_THRESHOLDS),
                     ])
         return model.fit(
@@ -129,7 +129,7 @@ def run_hyperparameter_tuning(config: Config, train_ds, val_ds, result_path = ".
     tuner = kt.Hyperband(
         TransferLearningTuner(config, train_ds, val_ds),
         objective=kt.Objective('val_pr_auc', direction='max'),
-        max_epochs=20,#config.NUM_INITIAL_EPOCHS + config.NUM_FINE_TUNE_EPOCHS,
+        max_epochs=15,#config.NUM_INITIAL_EPOCHS + config.NUM_FINE_TUNE_EPOCHS,
         factor=3,
         directory= result_path,
         project_name=f'{config.MODEL_ARCHITECTURE}_{dataset_code}_tuning',

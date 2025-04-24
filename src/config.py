@@ -349,7 +349,7 @@ class Config:
         'type': 'float'
     },
     'l2_regularization': {
-        'min_value': 1e-3,
+        'min_value': 1e-4,
         'max_value': 1e-2,
         'sampling': 'log',
         'type': 'float'

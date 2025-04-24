@@ -102,15 +102,15 @@ class TransferLearningTuner(kt.HyperModel):
         # the model is pre-compiled in the build method
         # so we can directly use it here
         callbacks.append([
-                        ReduceLROnPlateau(
-                            monitor='val_pr_auc',
-                            factor=0.5,
-                            patience=3,
-                            min_lr=1e-7,
-                            min_delta=0.001,
-                            mode='max',
-                            verbose=1
-                        ),
+                        # ReduceLROnPlateau(
+                        #     monitor='val_pr_auc',
+                        #     factor=0.5,
+                        #     patience=3,
+                        #     min_lr=1e-7,
+                        #     min_delta=0.001,
+                        #     mode='max',
+                        #     verbose=1
+                        # ),
                         F1ScoreCallback(thresholds=self.config.METRIC_THRESHOLDS),
                     ])
         return model.fit(
