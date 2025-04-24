@@ -99,7 +99,7 @@ class Config:
     L2_REGULARIZATION: float = 0.003# reduced from 0.001
     DROPOUT_RATE: float = 0.25# reduced from 0.3
     INITIAL_LR: float = 0.04
-    NUM_INITIAL_EPOCHS: int = 2
+    NUM_INITIAL_EPOCHS: int = 60
     NUM_FINE_TUNE_EPOCHS: int = 0
     FINE_TUNE_LR: float = 0.001
     FINE_TUNE_FROM_LAYER: int = 0 #conv4 143#conv5
@@ -330,9 +330,9 @@ class Config:
     
     HP_SPACE = {
     'head_dense_units': {
-        'min_value': 128,
+        'min_value': 64,
         'max_value': 512,
-        'step': 128,
+        'step': 64,
         'type': 'int'
     },
     'dropout_rate': {
