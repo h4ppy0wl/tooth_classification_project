@@ -4,6 +4,9 @@ name: mrcnn-xcnn-v1
 channels:
   - defaults
 dependencies:
+  - python=3.10
+  - numpy==1.23.5
+  - pip
   - _libgcc_mutex=0.1=main
   - _openmp_mutex=5.1=1_gnu
   - anyio=4.2.0=py310h06a4308_0
@@ -84,6 +87,8 @@ dependencies:
   - rfc3339-validator=0.1.4=py310h06a4308_0
   - rfc3986-validator=0.1.1=py310h06a4308_0
   - rpds-py=0.10.6=py310hb02cf49_0
+  - scikit-image==0.16.2
+  - scikit-learn==1.5.1
   - send2trash=1.8.2=py310h06a4308_0
   - setuptools=69.5.1=py310h06a4308_0
   - six=1.16.0=pyhd3eb1b0_1
@@ -191,8 +196,6 @@ dependencies:
       - requests-oauthlib==2.0.0
       - rich==13.7.1
       - rsa==4.9
-      - scikit-image==0.16.2
-      - scikit-learn==1.5.1
       - scipy==1.11.3
       - shapely==2.0.4
       - sqlalchemy==2.0.31
