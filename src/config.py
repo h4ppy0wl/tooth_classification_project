@@ -53,6 +53,13 @@ class Config:
     OUTPUT_DIR: str = "data/processed"
     DATA_DIR: str = "/home/arash/tooth_classification_project"#"C:/Users/anedaeij23/Project/tooth_classification_project"#
     LOG_DIR: str = "logs"
+    
+    # HPT loads base weights like this
+    # pretrained_weights_path = os.path.join( self.config.MODEL_DIR,
+    #     f"base_model_{self.config.MODEL_ARCHITECTURE}.h5")
+    # set the path for the model with initial training
+    MODEL_DIR: str = "./path"
+    
     TRAIN_JSON_NAME: str = f"{TARGET_CLASS}_filtered_train.json"
     VAL_JSON_NAME: str = f"{TARGET_CLASS}_filtered_val.json"
     TEST_JSON_NAME: str = f"{TARGET_CLASS}_filtered_test.json"
@@ -330,45 +337,67 @@ class Config:
     
     HP_SPACE = {
     'head_dense_units': {
-        'min_value': 64,
+        'min_value': 128,
         'max_value': 512,
-        'step': 64,
+        'step': 128,
         'type': 'int'
     },
     'dropout_rate': {
-        'min_value': 0.1,
-        'max_value': 0.5,
+        'min_value': 0.2,
+        'max_value': 0.4,
         'step': 0.1,
         'type': 'float'
     },
     'l2_regularization': {
-        'min_value': 1e-4,
-        'max_value': 1e-1,
+        'min_value': 1e-3,
+        'max_value': 1e-2,
         'sampling': 'log',
         'type': 'float'
     },
     'initial_lr': {
         'min_value': 1e-3,
-        'max_value': 1e-1,
+        'max_value': 5e-2,
         'sampling': 'log',
         'type': 'float'
     },
-    # 'fine_tune_lr': {
-    #     'min_value': 1e-5,
-    #     'max_value': 1e-3,
-    #     'sampling': 'log',
-    #     'type': 'float'
-    # },
-    'class_weight_neg': {  # weight for class 0
-        'min_value': 0.2,
-        'max_value': 1.0,
-        'step': 0.2,
+    'momentum': {
+        'min_value': 0.75,
+        'max_value': 0.9,
+        'step': 0.5,
         'type': 'float'
     },
-    'class_weight_pos': {  # weight for class 1
-        'min_value': 1.0,
-        'max_value': 2.0,
-        'step': 0.1,
-        'type': 'float'
-    }
+    # 'class_weight_neg': {  # weight for class 0
+    #     'min_value': 0.2,
+    #     'max_value': 1.0,
+    #     'step': 0.2,
+    #     'type': 'float'
+    # },
+    # 'class_weight_pos': {  # weight for class 1
+    #     'min_value': 1.0,
+    #     'max_value': 2.0,
+    #     'step': 0.1,
+    #     'type': 'float'
+    # }
 }
+    
+    # uncomment for fine tuning HPT
+#     HP_SPACE = {
+#     'dropout_rate': {
+#         'min_value': 0.1,
+#         'max_value': 0.5,
+#         'step': 0.1,
+#         'type': 'float'
+#     },
+#     'l2_regularization': {
+#         'min_value': 1e-4,
+#         'max_value': 1e-1,
+#         'sampling': 'log',
+#         'type': 'float'
+#     },
+#     'fine_tune_lr': {
+#         'min_value': 1e-5,
+#         'max_value': 1e-3,
+#         'sampling': 'log',
+#         'type': 'float'
+#     },
+# }

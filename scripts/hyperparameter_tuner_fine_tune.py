@@ -54,7 +54,7 @@ class TransferLearningTuner(kt.HyperModel):
             
             # Set the config attribute
             setattr(self.config, param_name.upper(), value)
-        
+
         # Define class weights only if specified in HP_SPACE
         if 'class_weight_neg' in self.config.HP_SPACE and 'class_weight_pos' in self.config.HP_SPACE:
             neg_weight = hp.Float(
@@ -78,6 +78,20 @@ class TransferLearningTuner(kt.HyperModel):
         # Create model with current hyperparameters
         model = create_model( self.config, 'transfer', trainable_base=False)
         
+        # Load pretrained weights from base training
+        pretrained_weights_path = os.path.join( self.config.MODEL_DIR,
+            f"base_model_{self.config.MODEL_ARCHITECTURE}.h5")
+        
+        if not os.path.exists(pretrained_weights_path):
+            raise ValueError(f"Pretrained weights not found at {pretrained_weights_path}")
+        
+        print(f"Loading pretrained weights from {pretrained_weights_path}")
+        model.load_weights(pretrained_weights_path)
+        
+        # Fine-tuning phase_ with current config this will not run
+        if self.config.FINE_TUNE_FROM_LAYER > 0:
+            mymodel = set_trainable_layers_new(mymodel, self.config.FINE_TUNE_FROM_LAYER)
+        
         # Compile model
         model = compile_model(model, self.config, self.config.INITIAL_LR)
         
@@ -91,7 +105,7 @@ class TransferLearningTuner(kt.HyperModel):
                         ReduceLROnPlateau(
                             monitor='val_pr_auc',
                             factor=0.5,
-                            patience=4,
+                            patience=3,
                             min_lr=1e-7,
                             min_delta=0.001,
                             mode='max',
@@ -110,7 +124,6 @@ class TransferLearningTuner(kt.HyperModel):
             **kwargs
         )
 
- 
 
 def run_hyperparameter_tuning(config: Config, train_ds, val_ds, result_path = "./"):
     from contextlib import redirect_stdout
@@ -129,10 +142,10 @@ def run_hyperparameter_tuning(config: Config, train_ds, val_ds, result_path = ".
     tuner = kt.Hyperband(
         TransferLearningTuner(config, train_ds, val_ds),
         objective=kt.Objective('val_pr_auc', direction='max'),
-        max_epochs=20,#config.NUM_INITIAL_EPOCHS + config.NUM_FINE_TUNE_EPOCHS,
+        max_epochs=10,#config.NUM_INITIAL_EPOCHS + config.NUM_FINE_TUNE_EPOCHS,
         factor=3,
         directory= result_path,
-        project_name=f'{config.MODEL_ARCHITECTURE}_{dataset_code}_tuning',
+        project_name=f'{config.MODEL_ARCHITECTURE}_{dataset_code}_ft_tuning',
         overwrite=False,
     )
     
@@ -149,6 +162,7 @@ def run_hyperparameter_tuning(config: Config, train_ds, val_ds, result_path = ".
         tuner.search()
     except KeyboardInterrupt:
         print("\n--- Search interrupted, gathering results so far...")
+        
     # Get best hyperparameters
     best_hps = tuner.get_best_hyperparameters(num_trials=1)[0]
     

@@ -230,6 +230,10 @@ def compile_model(model, config: Config, learning_rate: float) -> tf.keras.Model
                 thresholds=config.METRIC_THRESHOLDS
             ),
             tf.keras.metrics.AUC(name='auc'),
+            tf.keras.metrics.AUC(name='pr_auc',
+                curve='PR',        # Precision–Recall curve
+                summation_method='interpolation'  # (default) gives a smooth estimate
+            ),
             tf.keras.metrics.BinaryAccuracy(
                 name="binary_accuracy",
                 threshold=config.METRIC_THRESHOLDS[0]
