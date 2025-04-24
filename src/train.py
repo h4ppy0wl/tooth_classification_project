@@ -279,11 +279,17 @@ def setup_callbacks(config: Config, log_dir: str) -> list:
     return [
         EarlyStopping(
             monitor='val_auc',
-            patience=9,
+            patience=7,
             min_delta = 0.005,
             verbose=1,
             restore_best_weights=True
         ),
+        # EarlyStopping(
+        #     monitor='val_loss',
+        #     patience=3,
+        #     verbose=1,
+        #     restore_best_weights=True
+        # ),
         ReduceLROnPlateau(
             monitor='val_auc',
             factor=0.5,
@@ -399,63 +405,12 @@ def train_transfer_model(mymodel, train_dataset, val_dataset, config: Config, sa
     # )
     
     
-    
-    
     # Initial training setup
     initial_callbacks = setup_callbacks(config, log_dir)
     
     # Phase 1: Initial training with frozen base
     mymodel = compile_model(mymodel, config, initial_lr)
     
-    
-    
-    # # Define callbacks for the initial training phase:
-    # # ReduceLROnPlateau here will monitor validation loss and reduce LR if no improvement
-    # checkpoint_path = os.path.join(log_dir, "cp-{epoch:04d}_{val_auc:.2}.h5")
-    # f1_callback = F1ScoreCallback(thresholds=config.METRIC_THRESHOLDS)
-    # initial_callbacks = [
-    #     # EarlyStopping(monitor='loss', patience=3, verbose=1, restore_best_weights=True),
-    #     EarlyStopping(monitor='val_auc', patience=6, verbose=1, restore_best_weights=False),
-    #     ReduceLROnPlateau( monitor='val_auc',
-    #                        factor=0.5,
-    #                          patience=3,
-    #                            min_lr=1e-7,
-    #                                min_delta=1e-3,    # or smaller
-    #                                 mode='max',
-    #                                     verbose=1),
-    #     tensorboard_callback,
-    #     f1_callback,
-    #     tf.keras.callbacks.ModelCheckpoint(filepath=checkpoint_path, save_weights_only=True, save_freq='epoch', save_best_only=False, verbose=1)
-    # ]
-    
-    # # Phase 1: Initial training with frozen base.
-    # mymodel.compile(
-    #     optimizer=Adam(learning_rate=initial_lr),
-    #     loss= BinaryFocalCrossentropy(
-    #             apply_class_balancing=True,
-    #             # alpha=0.25,
-    #             gamma= config.BFC_GAMMA,
-    #             from_logits=False,
-    #             label_smoothing=0.0,
-    #             reduction="sum_over_batch_size",
-    #             name="binary_focal_crossentropy"
-    #             ),
-    #     # loss= BinaryCrossentropy(
-    #     #             from_logits=False,
-    #     #             label_smoothing=0.0,
-    #     #             reduction="sum_over_batch_size",
-    #     #             name="binary_crossentropy"
-    #     # ),
-    #     metrics=[
-    #         # tf.keras.metrics.BinaryAccuracy(name='accuracy'),
-    #         tf.keras.metrics.Precision(name=f'precision_at_{config.METRIC_THRESHOLDS[0]}', thresholds=config.METRIC_THRESHOLDS),
-    #         tf.keras.metrics.Recall(name=f'recall_at_{config.METRIC_THRESHOLDS[0]}', thresholds=config.METRIC_THRESHOLDS),
-    #         tf.keras.metrics.AUC(name='auc'),
-    #         # BalancedAccuracy(threshold=config.METRIC_THRESHOLDS[0], name= 'balanced_accuracy'),
-    #         tf.keras.metrics.BinaryAccuracy(name="binary_accuracy", dtype=None, threshold=config.METRIC_THRESHOLDS[0]),
-    #         # tf.keras.metrics.F1Score(name='f1score', average = 'weighted', thresholds=config.METRIC_THRESHOLDS)
-    #     ]
-    # )
     
     print("**************** Starting initial training **************** ")
     trainable_param_count = np.sum([tf.keras.backend.count_params(w) for w in mymodel.trainable_weights])
@@ -473,74 +428,29 @@ def train_transfer_model(mymodel, train_dataset, val_dataset, config: Config, sa
     completed_epochs = len(initial_history.history['loss'])
     log_history(initial_history, log_dir, f"initial_training_history_{num}.json")
     # Save weights after initial training.
-    if config.NUM_FINE_TUNE_EPOCHS == 0:
-        if save_models:
-            path = os.path.join(log_dir,f"{initial_weights_name}_{num}_.h5")
-            mymodel.save_weights(path)
-            print(f"Initial model weights saved to: {path}")
-            fine_tune_history = {}
-    else:
+    # if config.NUM_FINE_TUNE_EPOCHS == 0:
+    if save_models:
+        path = os.path.join(log_dir,f"{initial_weights_name}_{num}_.h5")
+        mymodel.save_weights(path)
+        print(f"Initial model weights saved to: {path}")
+        fine_tune_history = {}
+    # else:
+    if config.NUM_FINE_TUNE_EPOCHS > 0:
         # Phase 2: Fine-tuning.
         print("************ Fine-tuning model **************** ")
         print(f" **** Start fine tuning from epoch {completed_epochs +1}")
         
         print("Model trainable weights before fine-tuning:", len(mymodel.trainable_weights))
-        # Unfreeze all layers initially.
-        # mymodel.trainable = True
-
-        # if fine_tune_at is not None:
-        #     for i, layer in enumerate(mymodel.layers):
-        #         if i < fine_tune_at:
-        #             layer.trainable = False
-        #         else:
-        #             print(f"layer {i} set to trainable")
-        #             layer.trainable = True
-        #     print(f"Layer {fine_tune_at} and higher set to trainable in fine tuning step.")
-        if fine_tune_at > 0:
-            mymodel = set_trainable_layers_new(mymodel, fine_tune_at)
+        
+        # Unfreeze the base model and set the layers to be trainable.
+        # if fine_tune_at > 0:
+        mymodel = set_trainable_layers_new(mymodel, fine_tune_at)
 
         fine_tune_callbacks = setup_callbacks(config, log_dir)
         mymodel = compile_model(mymodel, config, fine_tune_lr)
         trainable_param_count = np.sum([tf.keras.backend.count_params(w) for w in mymodel.trainable_weights])
         print("trainable params in fine tuning model:", trainable_param_count)
-        # print("Model trainable weights after recompilation:", len(mymodel.trainable_weights))
 
-        # # Define callbacks for the fine-tuning phase:
-        # fine_tune_callbacks = [
-        #     # EarlyStopping(monitor='loss', patience=3, verbose=1, restore_best_weights=True),
-        #     EarlyStopping(monitor='val_auc', patience=6, verbose=1, restore_best_weights=True),
-        #     ReduceLROnPlateau(
-        #         monitor='val_auc',  # You can also set this to 'loss' if you prefer
-        #         factor=0.2,          # Factor by which the LR will be reduced
-        #         patience=3,          # Number of epochs with no improvement after which LR is reduced
-        #         min_lr=1e-7,         # Lower bound on the learning rate
-        #         verbose=1
-        #     ),
-        #     tensorboard_callback,
-        #     f1_callback
-        # ]
-        
-        # # Recompile with a lower learning rate.
-        # mymodel.compile(
-        #     optimizer=Adam(learning_rate=fine_tune_lr),
-        #     loss=BinaryFocalCrossentropy(
-        #             apply_class_balancing=True,
-        #             # alpha=0.25,
-        #             gamma=config.BFC_GAMMA,
-        #             from_logits=False,
-        #             label_smoothing=0.0,
-        #             reduction="sum_over_batch_size",
-        #             name="binary_focal_crossentropy"
-        #             ),
-        #     metrics=[
-        #         # tf.keras.metrics.BinaryAccuracy(name='accuracy'),
-        #     tf.keras.metrics.Precision(name=f'precision_at_{config.METRIC_THRESHOLDS[0]}', thresholds=config.METRIC_THRESHOLDS),
-        #     tf.keras.metrics.Recall(name=f'recall_at_{config.METRIC_THRESHOLDS[0]}', thresholds=config.METRIC_THRESHOLDS),
-        #     tf.keras.metrics.AUC(name='auc'),
-        #     # BalancedAccuracy(threshold=config.METRIC_THRESHOLDS[0], name= 'balanced_accuracy'),
-        #         # tf.keras.metrics.F1Score(name='f1score', average = 'weighted', thresholds=config.METRIC_THRESHOLDS)
-        #     ]
-        # )
 
         fine_tune_history = mymodel.fit(
             train_dataset,

@@ -250,7 +250,7 @@ def set_trainable_layers_new(model: tf.keras.Model, fine_tune_at=None):
     # Find the base model after preprocessing
     for layer in model.layers[2].layers[:fine_tune_at]:
         layer.trainable = False
-        print(f"{layer.name} layer in '{model.layers[2].name}' freezed.")
+        # print(f"{layer.name} layer in '{model.layers[2].name}' freezed.")
 
     print(f"####### Set layers {fine_tune_at} and higher in base model '{model.layers[2].name}', and the head to trainable")
     return model

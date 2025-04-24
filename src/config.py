@@ -68,7 +68,7 @@ class Config:
     
     TARGET_DIM: int = 256
     INPUT_SHAPE: tuple = (TARGET_DIM, TARGET_DIM, 3)
-    MASK_VALUE: int = 10 #if set to (5-49), the background will be blur and the value will be used for skimage.filter.gaussian sigma value
+    MASK_VALUE: int = 20 #if set to (5-49), the background will be blur and the value will be used for skimage.filter.gaussian sigma value
     ANTIALIZING_IN_RESIZING: bool = False
     
     
@@ -92,23 +92,23 @@ class Config:
     OVERSAMPLE_FACTOR: int = 2 
     
     
-    MODEL_ARCHITECTURE: str = "vgg16"# custome_v1, resnet50, ...
+    MODEL_ARCHITECTURE: str = "resnet50"# custome_v1, resnet50, ...
     TAP_INTO_BASE_MODEL: str = False
-    HEAD_DENSE_UNITS: int = 128
-    HEAD_ARCHITECTURE: str = "shallow"#"shallow", "moderate", "deep"
-    L2_REGULARIZATION: float = 0.1# reduced from 0.001
-    DROPOUT_RATE: float = 0.3# reduced from 0.3
-    INITIAL_LR: float = 0.08
-    NUM_INITIAL_EPOCHS: int = 35
+    HEAD_DENSE_UNITS: int = 256
+    HEAD_ARCHITECTURE: str = "moderate_combo"#"shallow", "moderate", "deep"
+    L2_REGULARIZATION: float = 0.003# reduced from 0.001
+    DROPOUT_RATE: float = 0.25# reduced from 0.3
+    INITIAL_LR: float = 0.04
+    NUM_INITIAL_EPOCHS: int = 60
     NUM_FINE_TUNE_EPOCHS: int = 0
     FINE_TUNE_LR: float = 0.001
-    FINE_TUNE_FROM_LAYER: int = 15 #conv4 143#conv5
+    FINE_TUNE_FROM_LAYER: int = 0 #conv4 143#conv5
     
-    OPTIMIZER: str = 'RMSprop'
-    MOMENTUM: float = 0.8 #applicable if SGD or RMSprop is selected
+    OPTIMIZER: str = 'SGD' # 'Adam', 'SGD', 'RMSprop'
+    MOMENTUM: float = 0.85 #applicable if SGD or RMSprop is selected
     LOSS_FUNC: str = 'BinaryCrossentropy'
     BFC_GAMMA: float = 2.0 # applicable if BinaryFocalCrossentropy is selected
-    CLASS_WEIGHTS: dict = field(default_factory=lambda:{0: 0.5, 1:1.0})
+    CLASS_WEIGHTS: dict = field(default_factory=lambda:{0: 0.5, 1:1.5})
     METRIC_THRESHOLDS: list = field(default_factory=lambda:[0.5]) # Threshold for threshold dependant metrics calculation (can be a list of thresholds)
 
     
@@ -125,14 +125,35 @@ class Config:
     # {"MASK_VALUE": 128, "AUGMENT_DATA": True, "NORMALIZE_IMAGES": True, "MASK_BG": True, "HEAD_DENSE_UNITS": 256, "MODEL_ARCHITECTURE": 'efficientnetv2b1', 'FINE_TUNE_FROM_LAYER': 0, 'HEAD_ARCHITECTURE': "moderate", "TAP_INTO_BASE_MODEL": False, "NUM_FINE_TUNE_EPOCHS": 0},
     # {"MASK_VALUE": 128, "AUGMENT_DATA": True, "NORMALIZE_IMAGES": True, "MASK_BG": True, "HEAD_DENSE_UNITS": 256, "MODEL_ARCHITECTURE": 'convnexttiny', 'FINE_TUNE_FROM_LAYER': 0, 'HEAD_ARCHITECTURE': "moderate", "TAP_INTO_BASE_MODEL": False, "NUM_FINE_TUNE_EPOCHS": 0},
     
-    # {"MASK_VALUE": 20, "AUGMENT_DATA": True, "NORMALIZE_IMAGES": True, "MASK_BG": True, "HEAD_DENSE_UNITS": 256, "MODEL_ARCHITECTURE": 'custom_v1', 'FINE_TUNE_FROM_LAYER': 0, 'HEAD_ARCHITECTURE': "moderate", "TAP_INTO_BASE_MODEL": False, "NUM_FINE_TUNE_EPOCHS": 0},
-    # {"MASK_VALUE": 20, "AUGMENT_DATA": True, "NORMALIZE_IMAGES": True, "MASK_BG": True, "HEAD_DENSE_UNITS": 256, "MODEL_ARCHITECTURE": 'custom_v2', 'FINE_TUNE_FROM_LAYER': 0, 'HEAD_ARCHITECTURE': "moderate", "TAP_INTO_BASE_MODEL": False, "NUM_FINE_TUNE_EPOCHS": 0},
-    {"MASK_VALUE": 20, "AUGMENT_DATA": True, "NORMALIZE_IMAGES": True, "MASK_BG": True, "HEAD_DENSE_UNITS": 256, "MODEL_ARCHITECTURE": 'vgg16', 'FINE_TUNE_FROM_LAYER': 0, 'HEAD_ARCHITECTURE': "moderate", "TAP_INTO_BASE_MODEL": False, "NUM_FINE_TUNE_EPOCHS": 0},
-    {"MASK_VALUE": 20, "AUGMENT_DATA": True, "NORMALIZE_IMAGES": True, "MASK_BG": True, "HEAD_DENSE_UNITS": 256, "MODEL_ARCHITECTURE": 'inceptionv3', 'FINE_TUNE_FROM_LAYER': 0, 'HEAD_ARCHITECTURE': "moderate", "TAP_INTO_BASE_MODEL": False, "NUM_FINE_TUNE_EPOCHS": 0},
-    {"MASK_VALUE": 20, "AUGMENT_DATA": True, "NORMALIZE_IMAGES": True, "MASK_BG": True, "HEAD_DENSE_UNITS": 256, "MODEL_ARCHITECTURE": 'resnet50', 'FINE_TUNE_FROM_LAYER': 0, 'HEAD_ARCHITECTURE': "moderate", "TAP_INTO_BASE_MODEL": False, "NUM_FINE_TUNE_EPOCHS": 0},
-    {"MASK_VALUE": 20, "AUGMENT_DATA": True, "NORMALIZE_IMAGES": True, "MASK_BG": True, "HEAD_DENSE_UNITS": 256, "MODEL_ARCHITECTURE": 'mobilenetv2', 'FINE_TUNE_FROM_LAYER': 0, 'HEAD_ARCHITECTURE': "moderate", "TAP_INTO_BASE_MODEL": False, "NUM_FINE_TUNE_EPOCHS": 0},
-    {"MASK_VALUE": 20, "AUGMENT_DATA": True, "NORMALIZE_IMAGES": True, "MASK_BG": True, "HEAD_DENSE_UNITS": 256, "MODEL_ARCHITECTURE": 'efficientnetv2b1', 'FINE_TUNE_FROM_LAYER': 0, 'HEAD_ARCHITECTURE': "moderate", "TAP_INTO_BASE_MODEL": False, "NUM_FINE_TUNE_EPOCHS": 0},
-    {"MASK_VALUE": 20, "AUGMENT_DATA": True, "NORMALIZE_IMAGES": True, "MASK_BG": True, "HEAD_DENSE_UNITS": 256, "MODEL_ARCHITECTURE": 'convnexttiny', 'FINE_TUNE_FROM_LAYER': 0, 'HEAD_ARCHITECTURE': "moderate", "TAP_INTO_BASE_MODEL": False, "NUM_FINE_TUNE_EPOCHS": 0},
+    # {"MASK_VALUE": 20, "AUGMENT_DATA": True, "NORMALIZE_IMAGES": True, "MASK_BG": True, "HEAD_DENSE_UNITS": 256, "MODEL_ARCHITECTURE": 'vgg16', 'FINE_TUNE_FROM_LAYER': 16, 'HEAD_ARCHITECTURE': "moderate", "TAP_INTO_BASE_MODEL": False, "NUM_FINE_TUNE_EPOCHS": 15},
+    # {"MASK_VALUE": 20, "AUGMENT_DATA": True, "NORMALIZE_IMAGES": True, "MASK_BG": True, "HEAD_DENSE_UNITS": 256, "MODEL_ARCHITECTURE": 'inceptionv3', 'FINE_TUNE_FROM_LAYER': 277, 'HEAD_ARCHITECTURE': "moderate", "TAP_INTO_BASE_MODEL": False, "NUM_FINE_TUNE_EPOCHS": 15},
+    # {"MASK_VALUE": 20, "AUGMENT_DATA": True, "NORMALIZE_IMAGES": True, "MASK_BG": True, "HEAD_DENSE_UNITS": 256, "MODEL_ARCHITECTURE": 'resnet50', 'FINE_TUNE_FROM_LAYER': 143, 'HEAD_ARCHITECTURE': "moderate", "TAP_INTO_BASE_MODEL": False, "NUM_FINE_TUNE_EPOCHS": 15},
+    {"MASK_VALUE": 20, "AUGMENT_DATA": True, "NORMALIZE_IMAGES": True, "MASK_BG": True, "HEAD_DENSE_UNITS": 256, "MODEL_ARCHITECTURE": 'resnet50', 'FINE_TUNE_FROM_LAYER': 155, 'HEAD_ARCHITECTURE': "moderate", "TAP_INTO_BASE_MODEL": False, "NUM_FINE_TUNE_EPOCHS": 15},
+    {"MASK_VALUE": 0, "AUGMENT_DATA": True, "NORMALIZE_IMAGES": True, "MASK_BG": True, "HEAD_DENSE_UNITS": 256, "MODEL_ARCHITECTURE": 'resnet50', 'FINE_TUNE_FROM_LAYER': 155, 'HEAD_ARCHITECTURE': "moderate", "TAP_INTO_BASE_MODEL": False, "NUM_FINE_TUNE_EPOCHS": 15},
+    {"MASK_VALUE": 128, "AUGMENT_DATA": True, "NORMALIZE_IMAGES": True, "MASK_BG": True, "HEAD_DENSE_UNITS": 256, "MODEL_ARCHITECTURE": 'resnet50', 'FINE_TUNE_FROM_LAYER': 155, 'HEAD_ARCHITECTURE': "moderate", "TAP_INTO_BASE_MODEL": False, "NUM_FINE_TUNE_EPOCHS": 15},
+    # {"MASK_VALUE": 20, "AUGMENT_DATA": True, "NORMALIZE_IMAGES": True, "MASK_BG": True, "HEAD_DENSE_UNITS": 256, "MODEL_ARCHITECTURE": 'resnet50', 'FINE_TUNE_FROM_LAYER': 165, 'HEAD_ARCHITECTURE': "moderate", "TAP_INTO_BASE_MODEL": False, "NUM_FINE_TUNE_EPOCHS": 15},
+    # {"MASK_VALUE": 20, "AUGMENT_DATA": True, "NORMALIZE_IMAGES": True, "MASK_BG": True, "HEAD_DENSE_UNITS": 256, "MODEL_ARCHITECTURE": 'inceptionv3', 'FINE_TUNE_FROM_LAYER': 0, 'HEAD_ARCHITECTURE': "moderate", "TAP_INTO_BASE_MODEL": False, "NUM_FINE_TUNE_EPOCHS": 0},
+    # {"MASK_VALUE": 20, "AUGMENT_DATA": True, "NORMALIZE_IMAGES": True, "MASK_BG": True, "HEAD_DENSE_UNITS": 256, "MODEL_ARCHITECTURE": 'resnet50', 'FINE_TUNE_FROM_LAYER': 0, 'HEAD_ARCHITECTURE': "moderate", "TAP_INTO_BASE_MODEL": False, "NUM_FINE_TUNE_EPOCHS": 0},
+    # {"MASK_VALUE": 20, "AUGMENT_DATA": True, "NORMALIZE_IMAGES": True, "MASK_BG": True, "HEAD_DENSE_UNITS": 256, "MODEL_ARCHITECTURE": 'mobilenetv2', 'FINE_TUNE_FROM_LAYER': 0, 'HEAD_ARCHITECTURE': "moderate", "TAP_INTO_BASE_MODEL": False, "NUM_FINE_TUNE_EPOCHS": 0},
+    # {"MASK_VALUE": 20, "AUGMENT_DATA": True, "NORMALIZE_IMAGES": True, "MASK_BG": True, "HEAD_DENSE_UNITS": 256, "MODEL_ARCHITECTURE": 'efficientnetv2b1', 'FINE_TUNE_FROM_LAYER': 0, 'HEAD_ARCHITECTURE': "moderate", "TAP_INTO_BASE_MODEL": False, "NUM_FINE_TUNE_EPOCHS": 0},
+    # {"MASK_VALUE": 20, "AUGMENT_DATA": True, "NORMALIZE_IMAGES": True, "MASK_BG": True, "HEAD_DENSE_UNITS": 256, "MODEL_ARCHITECTURE": 'convnexttiny', 'FINE_TUNE_FROM_LAYER': 0, 'HEAD_ARCHITECTURE': "moderate", "TAP_INTO_BASE_MODEL": False, "NUM_FINE_TUNE_EPOCHS": 0},
+
+##########
+    # {"MASK_VALUE": 20, "AUGMENT_DATA": True, "NORMALIZE_IMAGES": True, "MASK_BG": True, "HEAD_DENSE_UNITS": 256, "MODEL_ARCHITECTURE": 'vgg16', 'FINE_TUNE_FROM_LAYER': 16, 'HEAD_ARCHITECTURE': "moderate_combo", "TAP_INTO_BASE_MODEL": False, "NUM_FINE_TUNE_EPOCHS": 15},
+    # {"MASK_VALUE": 20, "AUGMENT_DATA": True, "NORMALIZE_IMAGES": True, "MASK_BG": True, "HEAD_DENSE_UNITS": 256, "MODEL_ARCHITECTURE": 'inceptionv3', 'FINE_TUNE_FROM_LAYER': 277, 'HEAD_ARCHITECTURE': "moderate_combo", "TAP_INTO_BASE_MODEL": False, "NUM_FINE_TUNE_EPOCHS": 15},
+    # {"MASK_VALUE": 20, "AUGMENT_DATA": True, "NORMALIZE_IMAGES": True, "MASK_BG": True, "HEAD_DENSE_UNITS": 256, "MODEL_ARCHITECTURE": 'resnet50', 'FINE_TUNE_FROM_LAYER': 143, 'HEAD_ARCHITECTURE': "moderate_combo", "TAP_INTO_BASE_MODEL": False, "NUM_FINE_TUNE_EPOCHS": 15},
+    {"MASK_VALUE": 20, "AUGMENT_DATA": True, "NORMALIZE_IMAGES": True, "MASK_BG": True, "HEAD_DENSE_UNITS": 256, "MODEL_ARCHITECTURE": 'resnet50', 'FINE_TUNE_FROM_LAYER': 155, 'HEAD_ARCHITECTURE': "moderate_combo", "TAP_INTO_BASE_MODEL": False, "NUM_FINE_TUNE_EPOCHS": 15},
+    {"MASK_VALUE": 0, "AUGMENT_DATA": True, "NORMALIZE_IMAGES": True, "MASK_BG": True, "HEAD_DENSE_UNITS": 256, "MODEL_ARCHITECTURE": 'resnet50', 'FINE_TUNE_FROM_LAYER': 155, 'HEAD_ARCHITECTURE': "moderate_combo", "TAP_INTO_BASE_MODEL": False, "NUM_FINE_TUNE_EPOCHS": 15},
+    {"MASK_VALUE": 128, "AUGMENT_DATA": True, "NORMALIZE_IMAGES": True, "MASK_BG": True, "HEAD_DENSE_UNITS": 256, "MODEL_ARCHITECTURE": 'resnet50', 'FINE_TUNE_FROM_LAYER': 155, 'HEAD_ARCHITECTURE': "moderate_combo", "TAP_INTO_BASE_MODEL": False, "NUM_FINE_TUNE_EPOCHS": 15},
+    # {"MASK_VALUE": 20, "AUGMENT_DATA": True, "NORMALIZE_IMAGES": True, "MASK_BG": True, "HEAD_DENSE_UNITS": 256, "MODEL_ARCHITECTURE": 'resnet50', 'FINE_TUNE_FROM_LAYER': 165, 'HEAD_ARCHITECTURE': "moderate_combo", "TAP_INTO_BASE_MODEL": False, "NUM_FINE_TUNE_EPOCHS": 15},
+    # {"MASK_VALUE": 20, "AUGMENT_DATA": True, "NORMALIZE_IMAGES": True, "MASK_BG": True, "HEAD_DENSE_UNITS": 256, "MODEL_ARCHITECTURE": 'mobilenetv2', 'FINE_TUNE_FROM_LAYER': 0, 'HEAD_ARCHITECTURE': "moderate_combo", "TAP_INTO_BASE_MODEL": False, "NUM_FINE_TUNE_EPOCHS": 0},
+    # {"MASK_VALUE": 20, "AUGMENT_DATA": True, "NORMALIZE_IMAGES": True, "MASK_BG": True, "HEAD_DENSE_UNITS": 256, "MODEL_ARCHITECTURE": 'efficientnetv2b1', 'FINE_TUNE_FROM_LAYER': 0, 'HEAD_ARCHITECTURE': "moderate_combo", "TAP_INTO_BASE_MODEL": False, "NUM_FINE_TUNE_EPOCHS": 0},
+    
+####
+
+
+
+
 
     # {"MASK_VALUE": 0, "AUGMENT_DATA": True, "NORMALIZE_IMAGES": True, "MASK_BG": True, "HEAD_DENSE_UNITS": 256, "MODEL_ARCHITECTURE": 'custom_v1', 'FINE_TUNE_FROM_LAYER': 0, 'HEAD_ARCHITECTURE': "moderate", "TAP_INTO_BASE_MODEL": False, "NUM_FINE_TUNE_EPOCHS": 0},
     # {"MASK_VALUE": 0, "AUGMENT_DATA": True, "NORMALIZE_IMAGES": True, "MASK_BG": True, "HEAD_DENSE_UNITS": 256, "MODEL_ARCHITECTURE": 'custom_v2', 'FINE_TUNE_FROM_LAYER': 0, 'HEAD_ARCHITECTURE': "moderate", "TAP_INTO_BASE_MODEL": False, "NUM_FINE_TUNE_EPOCHS": 0},
@@ -219,8 +240,6 @@ class Config:
     # # --- Block 6: Effect of Background Masking (Using mixed7 Output, Frozen Base, 256 Units, Shallow Head) ---
     # # Baseline Ref: {"MASK_VALUE": 128, "AUGMENT_DATA": True, "NORMALIZE_IMAGES": True, "MASK_BG": True, "HEAD_DENSE_UNITS": 256, "MODEL_ARCHITECTURE": 'inceptionv3', 'FINE_TUNE_FROM_LAYER': None, 'HEAD_ARCHITECTURE': "shallow_combo", "TAP_INTO_BASE_MODEL": True}, # trainable_base=False
     # {"MASK_VALUE": 128, "AUGMENT_DATA": True, "NORMALIZE_IMAGES": True, "MASK_BG": False, "HEAD_DENSE_UNITS": 256, "MODEL_ARCHITECTURE": 'inceptionv3', 'FINE_TUNE_FROM_LAYER': 0, 'HEAD_ARCHITECTURE': "shallow_combo", "TAP_INTO_BASE_MODEL": True, "NUM_FINE_TUNE_EPOCHS": 0}, # trainable_base=False
-
-])
                                     
                                     # [
     #     {"MASK_VALUE": 128, "AUGMENT_DATA": True, "NORMALIZE_IMAGES": True,  "MASK_BG": True, "HEAD_DENSE_UNITS": 128, "MODEL_ARCHITECTURE": 'vgg16', 'FINE_TUNE_FROM_LAYER': 15, 'HEAD_ARCHITECTURE': "shallow_combo", "TAP_INTO_BASE_MODEL": False},
@@ -306,4 +325,50 @@ class Config:
         # {"MASK_VALUE": 6, "AUGMENT_DATA": True,  "NORMALIZE_IMAGES": True,  "MASK_BG": True, "HEAD_DENSE_UNITS": 128, "MODEL_ARCHITECTURE": 'MobileNetV2', 'FINE_TUNE_FROM_LAYER': 143, 'HEAD_ARCHITECTURE': "shallow"},
         # {"MASK_VALUE": 10, "AUGMENT_DATA": True, "NORMALIZE_IMAGES": False,  "MASK_BG": True, "HEAD_DENSE_UNITS": 128, "MODEL_ARCHITECTURE": 'MobileNetV2', 'FINE_TUNE_FROM_LAYER': 143, 'HEAD_ARCHITECTURE': "shallow"},
         # {"MASK_VALUE": 10, "AUGMENT_DATA": True, "NORMALIZE_IMAGES": False,  "MASK_BG": True, "HEAD_DENSE_UNITS": 256, "MODEL_ARCHITECTURE": 'MobileNetV2', 'FINE_TUNE_FROM_LAYER': 143, 'HEAD_ARCHITECTURE': "shallow"},
-    # ])
+    ])
+    
+    
+    HP_SPACE = {
+    'head_dense_units': {
+        'min_value': 64,
+        'max_value': 512,
+        'step': 64,
+        'type': 'int'
+    },
+    'dropout_rate': {
+        'min_value': 0.1,
+        'max_value': 0.5,
+        'step': 0.1,
+        'type': 'float'
+    },
+    'l2_regularization': {
+        'min_value': 1e-4,
+        'max_value': 1e-1,
+        'sampling': 'log',
+        'type': 'float'
+    },
+    'initial_lr': {
+        'min_value': 1e-3,
+        'max_value': 1e-1,
+        'sampling': 'log',
+        'type': 'float'
+    },
+    # 'fine_tune_lr': {
+    #     'min_value': 1e-5,
+    #     'max_value': 1e-3,
+    #     'sampling': 'log',
+    #     'type': 'float'
+    # },
+    'class_weight_neg': {  # weight for class 0
+        'min_value': 0.2,
+        'max_value': 1.0,
+        'step': 0.2,
+        'type': 'float'
+    },
+    'class_weight_pos': {  # weight for class 1
+        'min_value': 1.0,
+        'max_value': 2.0,
+        'step': 0.1,
+        'type': 'float'
+    }
+}
