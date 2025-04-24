@@ -31,6 +31,9 @@ class TransferLearningTuner(kt.HyperModel):
         self.val_ds = val_ds
 
     def build(self, hp):
+        # Clear any previous session
+        tf.keras.backend.clear_session()
+       
         # Define hyperparameters using config space
         for param_name, param_config in self.config.HP_SPACE.items():
             if param_config['type'] == 'int':
