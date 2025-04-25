@@ -275,7 +275,16 @@ def setup_callbacks(config: Config, log_dir: str) -> list:
         write_images=True
     )
     
-    checkpoint_path = os.path.join(log_dir, "cp-{epoch:04d}_{val_auc:.2}.h5")
+    checkpoint_path = os.path.join(log_dir, "best_pr_auc_weights-epoch_{epoch:04d}_prauc_{val_pr_auc:.2}.h5")
+    model_checkpoint = tf.keras.callbacks.ModelCheckpoint(
+            filepath= checkpoint_path, # File path to save the weights
+            monitor='val_pr_auc',    # Monitor validation PR AUC
+            mode='max',              # Mode is 'max' because we want to maximize PR AUC
+            save_best_only=True,     # Only save when the monitored quantity improves
+            save_weights_only=True,  # Save only the model weights
+            verbose=1                # Log when weights are saved
+        )
+    
 
     f1_callback = F1ScoreCallback(thresholds=config.METRIC_THRESHOLDS)
     
@@ -305,13 +314,7 @@ def setup_callbacks(config: Config, log_dir: str) -> list:
         ),
         tensorboard_callback,
         f1_callback,
-        # tf.keras.callbacks.ModelCheckpoint(
-        #     filepath=checkpoint_path,
-        #     save_weights_only=True,
-        #     save_freq='epoch',
-        #     save_best_only=False,
-        #     verbose=1
-        # ),
+        model_checkpoint,
         # DebugCallback(),
         # GradientDebugCallback(),
     ]

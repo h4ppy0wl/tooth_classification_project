@@ -106,7 +106,7 @@ class Config:
     L2_REGULARIZATION: float = 0.001# reduced from 0.001
     DROPOUT_RATE: float = 0.4# reduced from 0.3
     INITIAL_LR: float = 0.05
-    NUM_INITIAL_EPOCHS: int = 20
+    NUM_INITIAL_EPOCHS: int = 60
     NUM_FINE_TUNE_EPOCHS: int = 0
     FINE_TUNE_LR: float = 0.001
     FINE_TUNE_FROM_LAYER: int = 0 #conv4 143#conv5
