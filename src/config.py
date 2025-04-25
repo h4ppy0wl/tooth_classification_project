@@ -102,7 +102,7 @@ class Config:
     MODEL_ARCHITECTURE: str = "resnet50"# custome_v1, resnet50, ...
     TAP_INTO_BASE_MODEL: str = False
     HEAD_DENSE_UNITS: int = 256
-    HEAD_ARCHITECTURE: str = "moderate_combo"#"shallow", "moderate", "deep"
+    HEAD_ARCHITECTURE: str = "deep_combo"#"shallow", "moderate", "deep"
     L2_REGULARIZATION: float = 0.003# reduced from 0.001
     DROPOUT_RATE: float = 0.25# reduced from 0.3
     INITIAL_LR: float = 0.04
@@ -120,8 +120,7 @@ class Config:
 
     
     # Follwoing list of dictionaries define the experiment space. these paramateras are a subset of the parameters above that can be set to define the space.
-    EXPERIMENT_PARAMS: list = field(default_factory = lambda:
-                                [
+    EXPERIMENT_PARAMS: list = field(default_factory = lambda:[
     # --- BLOCK 0 --- base model search_in Exp2 changed lr, do, 
     # {"MASK_VALUE": 128, "AUGMENT_DATA": True, "NORMALIZE_IMAGES": True, "MASK_BG": True, "HEAD_DENSE_UNITS": 256, "MODEL_ARCHITECTURE": 'custom_v1', 'FINE_TUNE_FROM_LAYER': 0, 'HEAD_ARCHITECTURE': "moderate", "TAP_INTO_BASE_MODEL": False, "NUM_FINE_TUNE_EPOCHS": 0},
     # {"MASK_VALUE": 128, "AUGMENT_DATA": True, "NORMALIZE_IMAGES": True, "MASK_BG": True, "HEAD_DENSE_UNITS": 256, "MODEL_ARCHITECTURE": 'custom_v2', 'FINE_TUNE_FROM_LAYER': 0, 'HEAD_ARCHITECTURE': "moderate", "TAP_INTO_BASE_MODEL": False, "NUM_FINE_TUNE_EPOCHS": 0},
@@ -337,9 +336,9 @@ class Config:
     
     HP_SPACE = {
     'head_dense_units': {
-        'min_value': 128,
+        'min_value': 256,
         'max_value': 512,
-        'step': 128,
+        'step': 256,
         'type': 'int'
     },
     'dropout_rate': {
@@ -350,20 +349,20 @@ class Config:
     },
     'l2_regularization': {
         'min_value': 1e-4,
-        'max_value': 1e-2,
+        'max_value': 1e-1,
         'sampling': 'log',
         'type': 'float'
     },
     'initial_lr': {
         'min_value': 1e-3,
-        'max_value': 5e-2,
+        'max_value': 5e-1,
         'sampling': 'log',
         'type': 'float'
     },
     'momentum': {
-        'min_value': 0.75,
+        'min_value': 0.7,
         'max_value': 0.9,
-        'step': 0.5,
+        'step': 0.1,
         'type': 'float'
     },
     # 'class_weight_neg': {  # weight for class 0
