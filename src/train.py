@@ -281,25 +281,25 @@ def setup_callbacks(config: Config, log_dir: str) -> list:
     
 
     return [
-        EarlyStopping(
-            monitor='val_auc',
-            patience=7,
-            min_delta = 0.005,
-            verbose=1,
-            restore_best_weights=True
-        ),
         # EarlyStopping(
-        #     monitor='val_loss',
-        #     patience=3,
+        #     monitor='val_pr_auc',
+        #     patience=5,
+        #     min_delta = 0.005,
         #     verbose=1,
         #     restore_best_weights=True
         # ),
+        EarlyStopping(
+            monitor='val_loss',
+            patience=7,
+            verbose=1,
+            restore_best_weights=True
+        ),
         ReduceLROnPlateau(
-            monitor='val_auc',
+            monitor='val_pr_auc',
             factor=0.5,
-            patience=4,
+            patience=3,
             min_lr=1e-7,
-            min_delta=0.001,
+            min_delta=0.005,
             mode='max',
             verbose=1
         ),
