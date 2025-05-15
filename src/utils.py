@@ -9,6 +9,7 @@ import tensorflow as tf
 from datetime import datetime
 from typing import Optional
 from dataclasses import asdict
+import re
 
 try:
     import yaml
@@ -254,3 +255,23 @@ def set_trainable_layers_new(model: tf.keras.Model, fine_tune_at=None):
 
     print(f"####### Set layers {fine_tune_at} and higher in base model '{model.layers[2].name}', and the head to trainable")
     return model
+
+def extract_epoch_number(filepath):
+    """
+    Extract epoch number from checkpoint filepath and convert to int.
+    it will be used in train.py
+    Example filepath: '/path/to/dir/best_pr_auc_weights-epoch_0014_prauc_0.46.h5'
+    
+    Args:
+        filepath (str): Full path to the checkpoint file
+        
+    Returns:
+        int: Epoch number (e.g., 14) or 0 if no match found
+    """   
+    filename = os.path.basename(filepath)
+    
+    # Find the epoch number
+    match = re.search(r'epoch_(\d{4})', filename)
+    if match:
+        return int(match.group(1))  # Converts '0014' to 14
+    return 0 

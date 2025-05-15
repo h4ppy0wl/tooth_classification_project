@@ -11,7 +11,7 @@ sys.path.append(parent_dir)
 sys.path.append(current_dir)
 from src import model as model_lib
 from src.config import Config
-from src.utils import log_config, log_history, set_trainable_layers_new
+from src.utils import log_config, log_history, set_trainable_layers_new, extract_epoch_number
 import numpy as np
 
 class F1ScoreCallback(tf.keras.callbacks.Callback):
@@ -305,7 +305,7 @@ def setup_callbacks(config: Config, log_dir: str) -> list:
         ),
         ReduceLROnPlateau(
             monitor='val_pr_auc',
-            factor=0.5,
+            factor=0.25,#0.5
             patience=3,
             min_lr=1e-7,
             min_delta=0.005,
@@ -418,30 +418,44 @@ def train_transfer_model(mymodel, train_dataset, val_dataset, config: Config, sa
     # Phase 1: Initial training with frozen base
     mymodel = compile_model(mymodel, config, initial_lr)
     
-    
-    print("**************** Starting initial training **************** ")
-    trainable_param_count = np.sum([tf.keras.backend.count_params(w) for w in mymodel.trainable_weights])
-    print("trainable params in initial model:", trainable_param_count)
-    initial_history = mymodel.fit(
-        train_dataset,
-        validation_data=val_dataset,
-        epochs=i_epochs,
-        class_weight= c_weights,
-        callbacks=initial_callbacks,
-        verbose = 1,
-    )
+    if config.NUM_INITIAL_EPOCHS > 0:
+        print("**************** Starting initial training **************** ")
+        trainable_param_count = np.sum([tf.keras.backend.count_params(w) for w in mymodel.trainable_weights])
+        print("trainable params in initial model:", trainable_param_count)
+        initial_history = mymodel.fit(
+            train_dataset,
+            validation_data=val_dataset,
+            epochs=i_epochs,
+            class_weight= c_weights,
+            callbacks=initial_callbacks,
+            verbose = 1,
+        )
 
-    initial_history.history['trainable_params'] = trainable_param_count
-    completed_epochs = len(initial_history.history['loss'])
-    log_history(initial_history, log_dir, f"initial_training_history_{num}.json")
-    # Save weights after initial training.
-    # if config.NUM_FINE_TUNE_EPOCHS == 0:
-    if save_models:
-        path = os.path.join(log_dir,f"{initial_weights_name}_{num}_.h5")
-        mymodel.save_weights(path)
-        print(f"Initial model weights saved to: {path}")
+        initial_history.history['trainable_params'] = trainable_param_count
+        completed_epochs = len(initial_history.history['loss'])
+        log_history(initial_history, log_dir, f"initial_training_history_{num}.json")
+        # Save weights after initial training.
+        # if config.NUM_FINE_TUNE_EPOCHS == 0:
+        if save_models:
+            path = os.path.join(log_dir,f"{initial_weights_name}_{num}_.h5")
+            mymodel.save_weights(path)
+            print(f"Initial model weights saved to: {path}")
+            fine_tune_history = {}
+    elif config.NUM_INITIAL_EPOCHS == 0:
+        print("Based on the configuration there is no initial training; only fine-tuning.")
+        # Load pretrained weights from base training
+        pretrained_weights_path = os.path.join( config.DATA_DIR, config.LOG_DIR, config.MODEL_WEIGHTS_DIR)
+        
+        if not os.path.exists(pretrained_weights_path):
+            raise ValueError(f"Pretrained weights not found at {pretrained_weights_path}")
+        
+        print(f"Loading pretrained weights for the initial training from {pretrained_weights_path}")
+        mymodel.load_weights(pretrained_weights_path)
+        completed_epochs = extract_epoch_number(pretrained_weights_path)
+        print(f"Initial training final epoch number from pretrained weights: {completed_epochs}")
+        initial_history = {}
         fine_tune_history = {}
-    # else:
+   
     if config.NUM_FINE_TUNE_EPOCHS > 0:
         # Phase 2: Fine-tuning.
         print("************ Fine-tuning model **************** ")

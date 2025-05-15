@@ -55,10 +55,10 @@ class Config:
     LOG_DIR: str = "logs"
     
     # HPT loads base weights like this
-    # pretrained_weights_path = os.path.join( self.config.MODEL_DIR,
+    # pretrained_weights_path = os.path.join( self.config.MODEL_WEIGHTS_DIR,
     #     f"base_model_{self.config.MODEL_ARCHITECTURE}.h5")
     # set the path for the model with initial training
-    MODEL_DIR: str = "./path"
+    MODEL_WEIGHTS_DIR: str = "tensorboard/experiment 13 - without fineTuning - SGD-include blurryimg - resnet50 - actual training/resnet50/20250425-095439/best_pr_auc_weights-epoch_0014_prauc_0.46.h5"
     
     TRAIN_JSON_NAME: str = f"{TARGET_CLASS}_filtered_train.json"
     VAL_JSON_NAME: str = f"{TARGET_CLASS}_filtered_val.json"
@@ -103,22 +103,100 @@ class Config:
     TAP_INTO_BASE_MODEL: str = False
     HEAD_DENSE_UNITS: int = 512
     HEAD_ARCHITECTURE: str = "deep_combo"#"shallow", "moderate", "deep"
-    L2_REGULARIZATION: float = 0.001# reduced from 0.001
-    DROPOUT_RATE: float = 0.4# reduced from 0.3
-    INITIAL_LR: float = 0.05
-    NUM_INITIAL_EPOCHS: int = 60
-    NUM_FINE_TUNE_EPOCHS: int = 0
-    FINE_TUNE_LR: float = 0.001
-    FINE_TUNE_FROM_LAYER: int = 0 #conv4 143#conv5
+    L2_REGULARIZATION: float = 0.002# initial 0.001, fine-tuning 0.002
+    DROPOUT_RATE: float = 0.1# initial 0.4, fine-tuning 0.2
+    INITIAL_LR: float = 0.05 # while lr step down was not used in HPT, also experint with a higher value
+    NUM_INITIAL_EPOCHS: int = 0
+    NUM_FINE_TUNE_EPOCHS: int = 30
+    FINE_TUNE_LR: float = 0.0056 # while lr step down was not used in HPT, also experint with a higher value
+    FINE_TUNE_FROM_LAYER: int = 165 #for resnet50 [143, 155, 165, 168, 171]: \
+                                    #[last block start , sub-block 2 of last block, sub-block 3 of last block, sub-sub block of last block, the final conv]
     
     OPTIMIZER: str = 'SGD' # 'Adam', 'SGD', 'RMSprop'
-    MOMENTUM: float = 0.8 #applicable if SGD or RMSprop is selected
+    MOMENTUM: float = 0.7 #initial 0.8, fine-tuning 0.7 #applicable if SGD or RMSprop is selected
     LOSS_FUNC: str = 'BinaryCrossentropy'
     BFC_GAMMA: float = 2.0 # applicable if BinaryFocalCrossentropy is selected
     CLASS_WEIGHTS: dict = field(default_factory=lambda:{0: 0.5, 1:1.5})
     METRIC_THRESHOLDS: list = field(default_factory=lambda:[0.5]) # Threshold for threshold dependant metrics calculation (can be a list of thresholds)
 
+    # Follwoing list of dictionaries define the experiment space for the initial training. these paramateras are a subset of the parameters above that can be set to define the space.
+    HP_SPACE = {
+    'head_dense_units': {
+        'min_value': 256,
+        'max_value': 512,
+        'step': 256,
+        'type': 'int'
+    },
+    'dropout_rate': {
+        'min_value': 0.2,
+        'max_value': 0.4,
+        'step': 0.1,
+        'type': 'float'
+    },
+    'l2_regularization': {
+        'min_value': 1e-4,
+        'max_value': 1e-1,
+        'sampling': 'log',
+        'type': 'float'
+    },
+    'initial_lr': {
+        'min_value': 1e-3,
+        'max_value': 5e-1,
+        'sampling': 'log',
+        'type': 'float'
+    },
+    'momentum': {
+        'min_value': 0.7,
+        'max_value': 0.9,
+        'step': 0.1,
+        'type': 'float'
+    },
+    # found the 0.5, 1.5 values for the class weights to be the best, based on the previs HPT
+    # 'class_weight_neg': {  # weight for class 0
+    #     'min_value': 0.2,
+    #     'max_value': 1.0,
+    #     'step': 0.2,
+    #     'type': 'float'
+    # },
+    # 'class_weight_pos': {  # weight for class 1
+    #     'min_value': 1.0,
+    #     'max_value': 2.0,
+    #     'step': 0.1,
+    #     'type': 'float'
+    # }
+}
+
+
+    # Follwoing list of dictionaries define the experiment space for the fine tuning. these paramateras are a subset of the parameters above that can be set to define the space.
+    # uncomment for fine tuning HPT
+    FT_HP_SPACE = {
+    'dropout_rate': {
+        'min_value': 0.1,
+        'max_value': 0.4,
+        'step': 0.1,
+        'type': 'float'
+    },
+    'l2_regularization': {
+        'min_value': 1e-4,
+        'max_value': 1e-1,
+        'sampling': 'log',
+        'type': 'float'
+    },
+    'fine_tune_lr': {
+        'min_value': 1e-6,
+        'max_value': 1e-3,
+        'sampling': 'log',
+        'type': 'float'
+    },
+    'momentum': {
+        'min_value': 0.65,
+        'max_value': 0.9,
+        'step': 0.05,
+        'type': 'float'
+    },
+}
     
+
     # Follwoing list of dictionaries define the experiment space. these paramateras are a subset of the parameters above that can be set to define the space.
     EXPERIMENT_PARAMS: list = field(default_factory = lambda:[
     # --- BLOCK 0 --- base model search_in Exp2 changed lr, do, 
@@ -148,7 +226,7 @@ class Config:
     # {"MASK_VALUE": 20, "AUGMENT_DATA": True, "NORMALIZE_IMAGES": True, "MASK_BG": True, "HEAD_DENSE_UNITS": 256, "MODEL_ARCHITECTURE": 'vgg16', 'FINE_TUNE_FROM_LAYER': 16, 'HEAD_ARCHITECTURE': "moderate_combo", "TAP_INTO_BASE_MODEL": False, "NUM_FINE_TUNE_EPOCHS": 15},
     # {"MASK_VALUE": 20, "AUGMENT_DATA": True, "NORMALIZE_IMAGES": True, "MASK_BG": True, "HEAD_DENSE_UNITS": 256, "MODEL_ARCHITECTURE": 'inceptionv3', 'FINE_TUNE_FROM_LAYER': 277, 'HEAD_ARCHITECTURE': "moderate_combo", "TAP_INTO_BASE_MODEL": False, "NUM_FINE_TUNE_EPOCHS": 15},
     # {"MASK_VALUE": 20, "AUGMENT_DATA": True, "NORMALIZE_IMAGES": True, "MASK_BG": True, "HEAD_DENSE_UNITS": 256, "MODEL_ARCHITECTURE": 'resnet50', 'FINE_TUNE_FROM_LAYER': 143, 'HEAD_ARCHITECTURE': "moderate_combo", "TAP_INTO_BASE_MODEL": False, "NUM_FINE_TUNE_EPOCHS": 15},
-    {"MASK_VALUE": 20, "AUGMENT_DATA": True, "NORMALIZE_IMAGES": True, "MASK_BG": True, "HEAD_DENSE_UNITS": 512, "MODEL_ARCHITECTURE": 'resnet50', 'FINE_TUNE_FROM_LAYER': 155, 'HEAD_ARCHITECTURE': "deep_combo", "TAP_INTO_BASE_MODEL": False, "NUM_FINE_TUNE_EPOCHS": 0},
+    {"MASK_VALUE": 20, "AUGMENT_DATA": True, "NORMALIZE_IMAGES": True, "MASK_BG": True, "HEAD_DENSE_UNITS": 512, "MODEL_ARCHITECTURE": 'resnet50', 'FINE_TUNE_FROM_LAYER': 165, 'HEAD_ARCHITECTURE': "deep_combo", "TAP_INTO_BASE_MODEL": False, "NUM_FINE_TUNE_EPOCHS": 30},
     # {"MASK_VALUE": 0, "AUGMENT_DATA": True, "NORMALIZE_IMAGES": True, "MASK_BG": True, "HEAD_DENSE_UNITS": 256, "MODEL_ARCHITECTURE": 'resnet50', 'FINE_TUNE_FROM_LAYER': 155, 'HEAD_ARCHITECTURE': "moderate_combo", "TAP_INTO_BASE_MODEL": False, "NUM_FINE_TUNE_EPOCHS": 15},
     # {"MASK_VALUE": 128, "AUGMENT_DATA": True, "NORMALIZE_IMAGES": True, "MASK_BG": True, "HEAD_DENSE_UNITS": 256, "MODEL_ARCHITECTURE": 'resnet50', 'FINE_TUNE_FROM_LAYER': 155, 'HEAD_ARCHITECTURE': "moderate_combo", "TAP_INTO_BASE_MODEL": False, "NUM_FINE_TUNE_EPOCHS": 15},
     # {"MASK_VALUE": 20, "AUGMENT_DATA": True, "NORMALIZE_IMAGES": True, "MASK_BG": True, "HEAD_DENSE_UNITS": 256, "MODEL_ARCHITECTURE": 'resnet50', 'FINE_TUNE_FROM_LAYER': 165, 'HEAD_ARCHITECTURE': "moderate_combo", "TAP_INTO_BASE_MODEL": False, "NUM_FINE_TUNE_EPOCHS": 15},
@@ -334,69 +412,3 @@ class Config:
     ])
     
     
-    HP_SPACE = {
-    'head_dense_units': {
-        'min_value': 256,
-        'max_value': 512,
-        'step': 256,
-        'type': 'int'
-    },
-    'dropout_rate': {
-        'min_value': 0.2,
-        'max_value': 0.4,
-        'step': 0.1,
-        'type': 'float'
-    },
-    'l2_regularization': {
-        'min_value': 1e-4,
-        'max_value': 1e-1,
-        'sampling': 'log',
-        'type': 'float'
-    },
-    'initial_lr': {
-        'min_value': 1e-3,
-        'max_value': 5e-1,
-        'sampling': 'log',
-        'type': 'float'
-    },
-    'momentum': {
-        'min_value': 0.7,
-        'max_value': 0.9,
-        'step': 0.1,
-        'type': 'float'
-    },
-    # 'class_weight_neg': {  # weight for class 0
-    #     'min_value': 0.2,
-    #     'max_value': 1.0,
-    #     'step': 0.2,
-    #     'type': 'float'
-    # },
-    # 'class_weight_pos': {  # weight for class 1
-    #     'min_value': 1.0,
-    #     'max_value': 2.0,
-    #     'step': 0.1,
-    #     'type': 'float'
-    # }
-}
-    
-    # uncomment for fine tuning HPT
-#     HP_SPACE = {
-#     'dropout_rate': {
-#         'min_value': 0.1,
-#         'max_value': 0.5,
-#         'step': 0.1,
-#         'type': 'float'
-#     },
-#     'l2_regularization': {
-#         'min_value': 1e-4,
-#         'max_value': 1e-1,
-#         'sampling': 'log',
-#         'type': 'float'
-#     },
-#     'fine_tune_lr': {
-#         'min_value': 1e-5,
-#         'max_value': 1e-3,
-#         'sampling': 'log',
-#         'type': 'float'
-#     },
-# }

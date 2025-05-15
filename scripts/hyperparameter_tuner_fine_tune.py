@@ -35,7 +35,7 @@ class TransferLearningTuner(kt.HyperModel):
         tf.keras.backend.clear_session()
        
         # Define hyperparameters using config space
-        for param_name, param_config in self.config.HP_SPACE.items():
+        for param_name, param_config in self.config.FT_HP_SPACE.items():
             if param_config['type'] == 'int':
                 value = hp.Int(
                     param_name,
@@ -55,19 +55,19 @@ class TransferLearningTuner(kt.HyperModel):
             # Set the config attribute
             setattr(self.config, param_name.upper(), value)
 
-        # Define class weights only if specified in HP_SPACE
-        if 'class_weight_neg' in self.config.HP_SPACE and 'class_weight_pos' in self.config.HP_SPACE:
+        # Define class weights only if specified in FT_HP_SPACE
+        if 'class_weight_neg' in self.config.FT_HP_SPACE and 'class_weight_pos' in self.config.FT_HP_SPACE:
             neg_weight = hp.Float(
                 'class_weight_neg',
-                min_value=self.config.HP_SPACE['class_weight_neg']['min_value'],
-                max_value=self.config.HP_SPACE['class_weight_neg']['max_value'],
-                step=self.config.HP_SPACE['class_weight_neg']['step']
+                min_value=self.config.FT_HP_SPACE['class_weight_neg']['min_value'],
+                max_value=self.config.FT_HP_SPACE['class_weight_neg']['max_value'],
+                step=self.config.FT_HP_SPACE['class_weight_neg']['step']
             )
             pos_weight = hp.Float(
                 'class_weight_pos',
-                min_value=self.config.HP_SPACE['class_weight_pos']['min_value'],
-                max_value=self.config.HP_SPACE['class_weight_pos']['max_value'],
-                step=self.config.HP_SPACE['class_weight_pos']['step']
+                min_value=self.config.FT_HP_SPACE['class_weight_pos']['min_value'],
+                max_value=self.config.FT_HP_SPACE['class_weight_pos']['max_value'],
+                step=self.config.FT_HP_SPACE['class_weight_pos']['step']
             )
             self.config.CLASS_WEIGHTS = {0: neg_weight, 1: pos_weight}
         else:
@@ -79,8 +79,7 @@ class TransferLearningTuner(kt.HyperModel):
         model = create_model( self.config, 'transfer', trainable_base=False)
         
         # Load pretrained weights from base training
-        pretrained_weights_path = os.path.join( self.config.MODEL_DIR,
-            f"base_model_{self.config.MODEL_ARCHITECTURE}.h5")
+        pretrained_weights_path = os.path.join( self.config.DATA_DIR, self.config.LOG_DIR, self.config.MODEL_WEIGHTS_DIR)
         
         if not os.path.exists(pretrained_weights_path):
             raise ValueError(f"Pretrained weights not found at {pretrained_weights_path}")
@@ -90,7 +89,7 @@ class TransferLearningTuner(kt.HyperModel):
         
         # Fine-tuning phase_ with current config this will not run
         if self.config.FINE_TUNE_FROM_LAYER > 0:
-            mymodel = set_trainable_layers_new(mymodel, self.config.FINE_TUNE_FROM_LAYER)
+            model = set_trainable_layers_new(model, self.config.FINE_TUNE_FROM_LAYER)
         
         # Compile model
         model = compile_model(model, self.config, self.config.INITIAL_LR)
